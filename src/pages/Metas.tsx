@@ -26,11 +26,15 @@ export default function Metas() {
 
   useEffect(() => {
     if (!uid) return
-    setMsg(null); setErro(null)
+    // esconde o formulário até carregar, para não salvar os dados da unidade/mês anterior por cima desta
+    let vivo = true
+    setM(null); setMsg(null); setErro(null)
     supabase.from('metas').select('*').eq('unidade_id', uid).eq('mes', inicioMes(mes)).maybeSingle().then(({ data }) => {
+      if (!vivo) return
       setExiste(Boolean(data))
       setM(data ? (data as Meta) : vazia(uid, mes))
     })
+    return () => { vivo = false }
   }, [uid, mes])
 
   async function copiarAnterior() {
