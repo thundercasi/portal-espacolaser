@@ -3,14 +3,23 @@ import { FileSpreadsheet, Upload } from 'lucide-react'
 import readXlsxFile from 'read-excel-file/browser'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { lerCSV, lerLinhas, normalizar, type Lote } from '../lib/importar'
-import { fmtData } from '../lib/format'
+import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote } from '../lib/importar'
+import { addMeses, fimMes, fmtData, inicioMes, mesAtual } from '../lib/format'
 import type { Importacao } from '../lib/types'
-import { Badge, Empty, ErrorBox, PageHeader } from '../components/ui'
+import { Badge, Empty, ErrorBox, MonthPicker, PageHeader } from '../components/ui'
 
-const TIPO_LABEL = { leads: 'Leads', agendamentos: 'Agendamentos', vendas: 'Vendas' } as const
-const CHAVE = { leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento' } as const
+const TIPO_LABEL = {
+  leads: 'Leads', agendamentos: 'Agendamentos', vendas: 'Vendas', vendas_vendedor: 'Vendas por vendedor', cancelamentos: 'Cancelamentos',
+} as const
+const CHAVE = {
+  leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento', vendas_vendedor: 'mes,estabelecimento,vendedor', cancelamentos: 'orcamento,item',
+} as const
 const LOTE_DB = 500
+
+function descreverIgnorada(nome: string, linhas: Parameters<typeof diagnosticar>[0]) {
+  const d = diagnosticar(linhas)
+  return d ? `${nome} (parece ${TIPO_LABEL[d.tipo]}, mas falta a coluna ${d.faltando.map((x) => `"${x}"`).join(', ')})` : nome
+}
 
 async function lerArquivo(f: File): Promise<{ lotes: Lote[]; ignoradas: string[] }> {
   const lotes: Lote[] = [], ignoradas: string[] = []
@@ -18,12 +27,13 @@ async function lerArquivo(f: File): Promise<{ lotes: Lote[]; ignoradas: string[]
     const buf = await f.arrayBuffer()
     let texto = new TextDecoder('utf-8').decode(buf)
     if (texto.includes('�')) texto = new TextDecoder('windows-1252').decode(buf)
-    const lote = await lerLinhas(lerCSV(texto.replace(/^﻿/, '')), f.name)
-    if (lote) lotes.push(lote); else ignoradas.push(f.name)
+    const linhas = lerCSV(texto.replace(/^﻿/, ''))
+    const lote = await lerLinhas(linhas, f.name)
+    if (lote) lotes.push(lote); else ignoradas.push(descreverIgnorada(f.name, linhas))
   } else {
     for (const s of await readXlsxFile(f)) {
       const lote = await lerLinhas(s.data as never, `${f.name} › ${s.sheet}`)
-      if (lote) lotes.push(lote); else ignoradas.push(`${f.name} › ${s.sheet}`)
+      if (lote) lotes.push(lote); else ignoradas.push(descreverIgnorada(`${f.name} › ${s.sheet}`, s.data as never))
     }
   }
   return { lotes, ignoradas }
@@ -39,6 +49,8 @@ export default function Importar() {
   const [ok, setOk] = useState<string | null>(null)
   const [historico, setHistorico] = useState<Importacao[]>([])
   const [arrastando, setArrastando] = useState(false)
+  // o relatório de vendas por vendedor não tem data: por padrão, mês anterior (fechamento)
+  const [mesVendedor, setMesVendedor] = useState(addMeses(inicioMes(mesAtual()), -1).slice(0, 7))
 
   const carregarHistorico = () =>
     supabase.from('importacoes').select('*').order('created_at', { ascending: false }).limit(20)
@@ -55,7 +67,9 @@ export default function Importar() {
         todos.push(...r.lotes); ign.push(...r.ignoradas)
       }
       setLotes(todos); setIgnoradas(ign)
-      if (!todos.length) setErro('Nenhuma aba reconhecida. O arquivo precisa ter os cabeçalhos da exportação (ex.: "Id Lead", "Data Agendada", "ID Orç.").')
+      if (!todos.length) setErro(ign.some((x) => x.includes('falta a coluna'))
+        ? `Nenhuma aba reconhecida: ${ign.filter((x) => x.includes('falta a coluna')).join('; ')}.`
+        : 'Nenhuma aba reconhecida. O arquivo precisa ter os cabeçalhos da exportação (ex.: "Id Lead", "Data Agendada", "ID Orç.", "Vendedor", "Valor Cancelado").')
     } catch (e) {
       setErro(`Não foi possível ler o arquivo: ${(e as Error).message}`)
     }
@@ -68,11 +82,13 @@ export default function Importar() {
       for (const l of lotes) {
         for (let i = 0; i < l.linhas.length; i += LOTE_DB) {
           setProgresso(`${TIPO_LABEL[l.tipo]}: ${Math.min(i + LOTE_DB, l.linhas.length)} de ${l.linhas.length}`)
-          const { error } = await supabase.from(l.tipo).upsert(l.linhas.slice(i, i + LOTE_DB) as never[], { onConflict: CHAVE[l.tipo] })
+          const linhas = l.tipo === 'vendas_vendedor' ? l.linhas.map((r) => ({ ...r, mes: inicioMes(mesVendedor) })) : l.linhas
+          const { error } = await supabase.from(l.tipo).upsert(linhas.slice(i, i + LOTE_DB) as never[], { onConflict: CHAVE[l.tipo] })
           if (error) throw error
         }
         await supabase.from('importacoes').insert({
-          arquivo: l.origem, tipo: l.tipo, linhas: l.linhas.length, periodo_ini: l.periodo?.[0] ?? null, periodo_fim: l.periodo?.[1] ?? null,
+          arquivo: l.origem, tipo: l.tipo, linhas: l.linhas.length, periodo_ini: l.tipo === 'vendas_vendedor' ? inicioMes(mesVendedor) : l.periodo?.[0] ?? null,
+          periodo_fim: l.tipo === 'vendas_vendedor' ? fimMes(mesVendedor) : l.periodo?.[1] ?? null,
         })
       }
       setOk(`Importação concluída: ${lotes.map((l) => `${l.linhas.length} ${TIPO_LABEL[l.tipo].toLowerCase()}`).join(', ')}.`)
@@ -117,6 +133,9 @@ export default function Importar() {
                 <Badge className="bg-brand-100 text-brand-700">{TIPO_LABEL[l.tipo]}</Badge>
                 <span className="tabular-nums">{l.linhas.length.toLocaleString('pt-BR')} registros</span>
                 {l.periodo && <span className="text-slate-500">{fmtData(l.periodo[0])} a {fmtData(l.periodo[1])}</span>}
+                {l.tipo === 'vendas_vendedor' && (
+                  <span className="flex items-center gap-2 text-slate-600">Mês das vendas: <MonthPicker value={mesVendedor} onChange={setMesVendedor} /></span>
+                )}
                 {l.ignoradas > 0 && <span className="text-amber-700">{l.ignoradas} linhas sem data/ID ignoradas</span>}
               </div>
             ))}

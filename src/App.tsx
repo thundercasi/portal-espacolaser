@@ -10,6 +10,7 @@ const Importar = lazy(() => import('./pages/Importar'))
 const Metas = lazy(() => import('./pages/Metas'))
 const Cadastros = lazy(() => import('./pages/Cadastros'))
 const Cancelamento = lazy(() => import('./pages/Cancelamento'))
+const Premiacoes = lazy(() => import('./pages/Premiacoes'))
 
 function SemAcesso() {
   const { session } = useApp()
@@ -37,6 +38,7 @@ function Rotas() {
         <Route path="metas" element={<Metas />} />
         <Route path="cadastros" element={<Cadastros />} />
         <Route path="cancelamento" element={<Cancelamento />} />
+        <Route path="premiacoes" element={<Premiacoes />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

@@ -1,6 +1,6 @@
 import { Suspense, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator } from 'lucide-react'
+import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator, Trophy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 
@@ -16,6 +16,7 @@ const NAV = [
   {
     titulo: 'Ferramentas',
     itens: [
+      { to: '/premiacoes', label: 'Premiações', icon: Trophy },
       { to: '/cancelamento', label: 'Cancelamento', icon: Calculator },
     ],
   },

@@ -6,14 +6,27 @@ export interface Unidade {
   ativo: boolean
 }
 
-export interface Atendente {
+export type Funcao = 'Consultora' | 'Aplicadora' | 'Subgerente' | 'Gerente' | 'Outro'
+export const FUNCOES: Funcao[] = ['Consultora', 'Aplicadora', 'Subgerente', 'Gerente', 'Outro']
+
+/** pessoa da equipe; unidade_id null = rede (ex.: gerente das 3 unidades) */
+export interface Colaborador {
   id: string
-  unidade_id: string
-  nome_sistema: string
-  apelido: string
+  unidade_id: string | null
+  nome: string
+  funcao: Funcao
+  no_painel: boolean
   participa_meta: boolean
+  valor_fixo: number
   ativo: boolean
   ordem: number
+}
+
+/** de/para: usuário que aparece nas exportações (normalizado) → pessoa, por unidade */
+export interface ColaboradorUsuario {
+  unidade_id: string
+  usuario: string
+  colaborador_id: string
 }
 
 export interface Meta {
@@ -44,7 +57,7 @@ export interface LinhaPainel {
 export interface Importacao {
   id: string
   arquivo: string
-  tipo: 'leads' | 'agendamentos' | 'vendas'
+  tipo: 'leads' | 'agendamentos' | 'vendas' | 'vendas_vendedor' | 'cancelamentos'
   linhas: number
   periodo_ini: string | null
   periodo_fim: string | null

@@ -2,18 +2,19 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import type { Atendente, Unidade } from '../lib/types'
+import type { Unidade } from '../lib/types'
+import Equipe from '../components/Equipe'
 import { ErrorBox, PageHeader } from '../components/ui'
 
 export default function Cadastros() {
   const [erro, setErro] = useState<string | null>(null)
   return (
     <div>
-      <PageHeader title="Cadastros" subtitle="Unidades, atendentes e usuários com acesso" />
+      <PageHeader title="Cadastros" subtitle="Unidades, equipe (com de/para de usuários) e acessos" />
       <ErrorBox msg={erro} />
       <div className="space-y-6">
         <Unidades setErro={setErro} />
-        <Atendentes setErro={setErro} />
+        <Equipe setErro={setErro} />
         <Usuarios setErro={setErro} />
       </div>
     </div>
@@ -59,67 +60,6 @@ function Unidades({ setErro }: SetErro) {
             <td className="td"><input className="input" placeholder="Nova unidade" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} /></td>
             <td className="td"><input className="input min-w-80" placeholder="SP - CIDADE - BAIRRO" value={novo.estabelecimento} onChange={(e) => setNovo({ ...novo, estabelecimento: e.target.value })} /></td>
             <td className="td" colSpan={2}><button className="btn-primary" onClick={adicionar}><Plus size={16} /> Adicionar</button></td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-  )
-}
-
-function Atendentes({ setErro }: SetErro) {
-  const { unidades, atendentes, reloadCadastros } = useApp()
-  const [uid, setUid] = useState('')
-  const [novo, setNovo] = useState({ nome_sistema: '', apelido: '' })
-  const unidade = uid || unidades[0]?.id || ''
-  const lista = atendentes.filter((a) => a.unidade_id === unidade)
-
-  async function salvar(id: string, patch: Partial<Atendente>) {
-    const { error } = await supabase.from('atendentes').update(patch).eq('id', id)
-    setErro(error?.message ?? null); reloadCadastros()
-  }
-  async function adicionar() {
-    if (!novo.nome_sistema) return
-    const { error } = await supabase.from('atendentes').insert({
-      unidade_id: unidade, nome_sistema: novo.nome_sistema.trim(), apelido: novo.apelido.trim() || novo.nome_sistema.trim().split(' ')[0], ordem: lista.length + 1,
-    })
-    setErro(error?.message ?? null)
-    if (!error) setNovo({ nome_sistema: '', apelido: '' })
-    reloadCadastros()
-  }
-  async function remover(a: Atendente) {
-    if (!confirm(`Remover ${a.apelido} desta unidade? Os dados importados não são apagados.`)) return
-    const { error } = await supabase.from('atendentes').delete().eq('id', a.id)
-    setErro(error?.message ?? null); reloadCadastros()
-  }
-
-  return (
-    <section className="card overflow-x-auto">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <div>
-          <div className="text-sm font-semibold">Atendentes</div>
-          <p className="text-xs text-slate-500">"Nome no sistema" é como aparece nas colunas Atendente / Usuário de Criação (maiúsculas e acentos não importam).</p>
-        </div>
-        <select className="input w-44" value={unidade} onChange={(e) => setUid(e.target.value)}>
-          {unidades.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-        </select>
-      </div>
-      <table className="w-full">
-        <thead className="bg-slate-50"><tr><th className="th">Nome no sistema</th><th className="th">Apelido no painel</th><th className="th w-20">Ordem</th><th className="th">Participa da meta</th><th className="th">Ativa</th><th className="th" /></tr></thead>
-        <tbody className="divide-y divide-slate-100">
-          {lista.map((a) => (
-            <tr key={a.id}>
-              <td className="td"><input className="input min-w-72" defaultValue={a.nome_sistema} onBlur={(e) => e.target.value !== a.nome_sistema && salvar(a.id, { nome_sistema: e.target.value.trim() })} /></td>
-              <td className="td"><input className="input" defaultValue={a.apelido} onBlur={(e) => e.target.value !== a.apelido && salvar(a.id, { apelido: e.target.value })} /></td>
-              <td className="td"><input type="number" className="input w-16" defaultValue={a.ordem} onBlur={(e) => Number(e.target.value) !== a.ordem && salvar(a.id, { ordem: Number(e.target.value) })} /></td>
-              <td className="td"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={a.participa_meta} onChange={(e) => salvar(a.id, { participa_meta: e.target.checked })} /></td>
-              <td className="td"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={a.ativo} onChange={(e) => salvar(a.id, { ativo: e.target.checked })} /></td>
-              <td className="td text-right"><button className="btn-danger p-1.5" onClick={() => remover(a)} aria-label="Remover"><Trash2 size={16} /></button></td>
-            </tr>
-          ))}
-          <tr className="bg-slate-50/50">
-            <td className="td"><input className="input min-w-72" placeholder="NOME COMPLETO COMO NO SISTEMA" value={novo.nome_sistema} onChange={(e) => setNovo({ ...novo, nome_sistema: e.target.value })} /></td>
-            <td className="td"><input className="input" placeholder="Apelido" value={novo.apelido} onChange={(e) => setNovo({ ...novo, apelido: e.target.value })} /></td>
-            <td className="td" colSpan={4}><button className="btn-primary" onClick={adicionar}><Plus size={16} /> Adicionar</button></td>
           </tr>
         </tbody>
       </table>

@@ -13,7 +13,7 @@ const dec = (v: number | null | undefined) => (v == null ? '—' : fmtNum(Math.r
 const brl0 = (v: number | null | undefined) => (v == null ? '—' : fmtBRL(Math.round(v)).replace(/,00$/, ''))
 
 export default function Painel() {
-  const { unidades, atendentes } = useApp()
+  const { unidades, colaboradores, usuarios } = useApp()
   const [mes, setMes] = useState(mesAtual())
   const [unidadeId, setUnidadeId] = useState<string>('todas')
   const [linhas, setLinhas] = useState<LinhaPainel[] | null>(null)
@@ -42,8 +42,8 @@ export default function Painel() {
   const p = useMemo(() => {
     if (!linhas) return null
     const sel = unidadeId === 'todas' ? ativas : ativas.filter((u) => u.id === unidadeId)
-    return calcularPainel({ mes, hoje: hojeISO(), unidades: sel, atendentes, metas, linhas })
-  }, [linhas, metas, mes, unidadeId, ativas, atendentes])
+    return calcularPainel({ mes, hoje: hojeISO(), unidades: sel, colaboradores, usuarios, metas, linhas })
+  }, [linhas, metas, mes, unidadeId, ativas, colaboradores, usuarios])
 
   return (
     <div>

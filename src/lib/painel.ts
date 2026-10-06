@@ -1,6 +1,6 @@
 // Cálculos do painel — espelham as abas Paulista / Medon / Tivoli da planilha.
 import { normalizar } from './importar'
-import type { Atendente, LinhaPainel, Meta, Unidade } from './types'
+import type { Colaborador, ColaboradorUsuario, LinhaPainel, Meta, Unidade } from './types'
 
 /** origens de mídia que contam como "venda de avaliação" (coluna "Venda Av?" da planilha) */
 export const ORIGENS_AVALIACAO = ['INDIQUE AMIGO', 'FACEBOOK / INSTAGRAM']
@@ -69,11 +69,12 @@ export function calcularPainel(args: {
   mes: string            // YYYY-MM
   hoje: string           // YYYY-MM-DD
   unidades: Unidade[]
-  atendentes: Atendente[]
+  colaboradores: Colaborador[]
+  usuarios: ColaboradorUsuario[]
   metas: Meta[]
   linhas: LinhaPainel[]
 }): Painel {
-  const { mes, hoje, unidades, atendentes, metas, linhas } = args
+  const { mes, hoje, unidades, colaboradores, usuarios, metas, linhas } = args
   const [ano, m] = mes.split('-').map(Number)
   const n = new Date(Date.UTC(ano, m, 0)).getUTCDate()
 
@@ -92,37 +93,49 @@ export function calcularPainel(args: {
     else diasRestantes++
   }
 
-  // colunas de atendentes (mesma pessoa em duas unidades vira uma coluna só)
+  // colunas = pessoas da equipe marcadas para o painel (mesma pessoa em duas unidades vira uma coluna só)
   const colunas: Coluna[] = []
   const ids = new Set(unidades.map((u) => u.id))
-  for (const a of [...atendentes].filter((a) => ids.has(a.unidade_id) && a.ativo).sort((x, y) => x.ordem - y.ordem)) {
-    const chave = normalizar(a.nome_sistema)
-    const ja = colunas.find((c) => c.chave === chave)
-    if (ja) ja.participaMeta ||= a.participa_meta
-    else colunas.push({ chave, apelido: a.apelido, participaMeta: a.participa_meta })
+  const daSelecao = colaboradores.filter((c) => c.unidade_id && ids.has(c.unidade_id) && c.ativo)
+  for (const c of [...daSelecao].filter((c) => c.no_painel).sort((x, y) => x.ordem - y.ordem)) {
+    const chave = normalizar(c.nome)
+    const ja = colunas.find((x) => x.chave === chave)
+    if (ja) ja.participaMeta ||= c.participa_meta
+    else colunas.push({ chave, apelido: c.nome, participaMeta: c.participa_meta })
   }
-  const estabs = new Set(unidades.map((u) => normalizar(u.estabelecimento)))
+  const unidadePorEstab = new Map(unidades.map((u) => [normalizar(u.estabelecimento), u.id]))
+  const estabs = new Set(unidadePorEstab.keys())
+  // de/para: usuário da exportação → coluna da pessoa, dentro da unidade do registro
+  const colabPorId = new Map(daSelecao.map((c) => [c.id, c]))
+  const coluna = (estab: string, usuario: string): string | null => {
+    const uid = unidadePorEstab.get(normalizar(estab))
+    if (!uid) return null
+    const u = normalizar(usuario)
+    const vinc = usuarios.find((x) => x.unidade_id === uid && x.usuario === u)
+    const colab = vinc ? colabPorId.get(vinc.colaborador_id) : daSelecao.find((c) => c.unidade_id === uid && normalizar(c.nome) === u)
+    if (!colab || !colab.no_painel) return null
+    return normalizar(colab.nome)
+  }
   const doMes = (l: LinhaPainel) => l.dia >= 1 && l.dia <= n
 
   const leads: Record<string, number[]> = {}
   const agend: Record<string, number[]> = {}
   for (const c of colunas) { leads[c.chave] = vetor(n); agend[c.chave] = vetor(n) }
-  const outrosLeads = vetor(n)
+  const outrosLeads = vetor(n), outrosAgend = vetor(n)
   const avaliacoes = vetor(n), presencas = vetor(n), vendasAvQtd = vetor(n), vendasAvValor = vetor(n), vendasTotal = vetor(n)
 
   for (const l of linhas.filter(doMes)) {
     const qtd = Number(l.qtd), valor = Number(l.valor)
-    const pessoa = normalizar(l.pessoa)
     const daUnidade = estabs.has(normalizar(l.estabelecimento))
     switch (l.metrica) {
       case 'leads':
+      case 'agend_criados': {
         if (!daUnidade) break
-        if (leads[pessoa]) leads[pessoa][l.dia] += qtd
-        else outrosLeads[l.dia] += qtd
+        const col = coluna(l.estabelecimento, l.pessoa)
+        const alvo = l.metrica === 'leads' ? (col ? leads[col] : outrosLeads) : (col ? agend[col] : outrosAgend)
+        alvo[l.dia] += qtd
         break
-      case 'agend_criados': // como na planilha: conta pelo usuário que criou, em qualquer unidade
-        if (agend[pessoa]) agend[pessoa][l.dia] += qtd
-        break
+      }
       case 'avaliacoes':
         if (daUnidade) { avaliacoes[l.dia] += qtd; presencas[l.dia] += valor }
         break
@@ -133,10 +146,10 @@ export function calcularPainel(args: {
         break
     }
   }
-  if (soma(outrosLeads) > 0) {
+  if (soma(outrosLeads) + soma(outrosAgend) > 0) {
     colunas.push({ chave: '__outros', apelido: 'Outros', participaMeta: false })
     leads.__outros = outrosLeads
-    agend.__outros = vetor(n)
+    agend.__outros = outrosAgend
   }
 
   // metas (somadas quando há mais de uma unidade)
