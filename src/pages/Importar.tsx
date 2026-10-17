@@ -23,7 +23,14 @@ function descreverIgnorada(nome: string, linhas: Parameters<typeof diagnosticar>
 
 async function lerArquivo(f: File): Promise<{ lotes: Lote[]; ignoradas: string[] }> {
   const lotes: Lote[] = [], ignoradas: string[] = []
-  if (/\.csv$|\.txt$/i.test(f.name)) {
+  if (/\.json$/i.test(f.name)) {
+    // pacote gerado pela coleta automática do ELOS (scripts/elos-funil.js): { abas: [{ nome, linhas: [[cabeçalho], ...] }] }
+    const pacote = JSON.parse(await f.text()) as { abas?: { nome: string; linhas: (string | number | boolean | null)[][] }[] }
+    for (const aba of pacote.abas ?? []) {
+      const lote = await lerLinhas(aba.linhas, `${f.name} › ${aba.nome}`)
+      if (lote) lotes.push(lote); else ignoradas.push(descreverIgnorada(`${f.name} › ${aba.nome}`, aba.linhas))
+    }
+  } else if (/\.csv$|\.txt$/i.test(f.name)) {
     const buf = await f.arrayBuffer()
     let texto = new TextDecoder('utf-8').decode(buf)
     if (texto.includes('�')) texto = new TextDecoder('windows-1252').decode(buf)
@@ -173,7 +180,7 @@ export default function Importar() {
         <Upload className="text-slate-400" />
         <span className="text-sm font-medium">{lendo ? 'Lendo arquivo…' : 'Clique ou arraste os arquivos aqui'}</span>
         <span className="text-xs text-slate-500">Registros já importados são atualizados (sem duplicar)</span>
-        <input type="file" multiple accept=".xlsx,.csv,.txt" className="hidden"
+        <input type="file" multiple accept=".xlsx,.csv,.txt,.json" className="hidden"
           onChange={(e: ChangeEvent<HTMLInputElement>) => { selecionar(e.target.files); e.target.value = '' }} />
       </label>
 
