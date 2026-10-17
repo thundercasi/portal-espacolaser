@@ -64,3 +64,7 @@ Configurado em Cadastros → Equipe (fica guardado no sistema). Para cada regist
 ## Meta × Super meta no Painel
 
 O seletor no topo do Painel alterna entre a meta e a super meta. Na super meta, as metas de leads e agendamentos (e, por consequência, presenças, vendas e R$) sobem na proporção super meta ÷ meta de faturamento de cada unidade; taxas, ticket e pesos das dezenas não mudam. Unidades sem super meta cadastrada continuam com a meta normal (o painel avisa).
+
+## Coleta automática do ELOS (06h)
+
+Tarefa agendada "funil-coleta-elos" (app Claude, todo dia às 06h): abre o ELOS no Chrome, roda o script `scripts/elos-funil.js` (instalado no localStorage do ELOS como `ccfunil`), que faz as requisições dos relatórios pelas próprias tabelas do ELOS — Leads, Agendamentos (Serviço Avulso = AVALIAÇÃO, Data Programada do dia 1º até o fim do mês seguinte, Data de Criação no mês), Vendas (Data de Pagamento) e Cancelamentos — e baixa um único pacote `funil_elos_*.json`. O pacote é movido para `.coleta/` (fora do Git) e importado na tela Importar. Nos dias 1 a 3 o mês anterior também é recoletado. Requisitos: computador ligado, app Claude e Chrome abertos, logado no ELOS e no Funil (administrador).
