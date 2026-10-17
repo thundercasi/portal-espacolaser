@@ -117,10 +117,17 @@ export default function Importar() {
   }
 
   /**
-   * Vendas: as linhas de cada orçamento do arquivo substituem as que já existem no banco
-   * (o orçamento pode ter mudado de vendedor ou ter sido dividido entre vendedores).
+   * Vendas: o arquivo substitui tudo o que existe no mesmo período de pagamento e unidade
+   * (venda cancelada ou estornada no ELOS some do Funil) e também as linhas dos seus orçamentos
+   * (o orçamento pode ter mudado de data, de vendedor ou ter sido dividido entre vendedores).
    */
   async function gravarVendas(linhas: VendaRow[]) {
+    const datas = linhas.map((r) => r.data_pagamento).sort()
+    setProgresso('Vendas: substituindo o período…')
+    for (const estab of [...new Set(linhas.map((r) => r.estabelecimento))]) {
+      const { error } = await supabase.from('vendas').delete().eq('estabelecimento', estab).gte('data_pagamento', datas[0]).lte('data_pagamento', datas[datas.length - 1])
+      if (error) throw error
+    }
     const ids = [...new Set(linhas.map((r) => r.id_orcamento))]
     for (let i = 0; i < ids.length; i += LOTE_DB) {
       setProgresso(`Vendas: preparando ${Math.min(i + LOTE_DB, ids.length)} de ${ids.length}`)
