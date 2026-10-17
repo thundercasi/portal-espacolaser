@@ -47,6 +47,7 @@ export interface Painel {
   diasUteis: number
   diasPassados: number         // úteis antes de hoje (base da tendência)
   diasRestantes: number        // úteis de hoje em diante (base da meta/dia)
+  diaHoje: number              // dia de hoje no mês; 0 = mês futuro; diasNoMes + 1 = mês encerrado
   colunas: Coluna[]
   leads: Record<string, number[]>
   agend: Record<string, number[]>
@@ -274,7 +275,7 @@ export function calcularPainel(args: {
 
   const r = (x: number | null) => (temMeta ? x : null)
   return {
-    diasNoMes: n, util, diasUteis, diasPassados, diasRestantes,
+    diasNoMes: n, util, diasUteis, diasPassados, diasRestantes, diaHoje,
     colunas, leads, agend, avaliacoes, presencas, vendasAvQtd, vendasAvValor, vendasTotal, ind,
     taxas: {
       agendamento: { meta: r(div(metaAgend, metaLeads)), real: div(ind.avaliacoes.realizado, ind.leadsTotal.realizado) },

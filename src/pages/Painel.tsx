@@ -74,6 +74,7 @@ export default function Painel() {
               Nenhum dado importado para este mês. {admin && <Link to="/importar" className="font-medium text-brand-700 underline">Importar exportações</Link>}
             </div>
           )}
+          <DestaqueMetaDiaria p={p} />
           <Kpis p={p} />
           <div className="mt-4 grid gap-4 xl:grid-cols-5">
             <div className="xl:col-span-3"><Funil p={p} /></div>
@@ -88,6 +89,72 @@ export default function Painel() {
 }
 
 // ---------------------------------------------------------------------------
+
+/** Destaque no topo: quanto precisa vender por dia para bater a dezena atual e o mês (R$ vendas total). */
+function DestaqueMetaDiaria({ p }: { p: TPainel }) {
+  if (!p.temMeta) return null
+  const encerrado = p.diaHoje > p.diasNoMes
+  const futuro = p.diaHoje === 0
+  const uteis = (a: number, b: number) => { let t = 0; for (let d = Math.max(a, p.diaHoje || 1); d <= b; d++) if (p.util[d]) t++; return t }
+  const dez = p.dezenas.find((d) => d.atual) ?? (futuro ? p.dezenas[0] : null)
+  const mes = p.ind.vendasTotal
+  const superDia = p.superMeta != null && p.diasRestantes ? Math.max(p.superMeta - mes.realizado, 0) / p.diasRestantes : null
+
+  if (encerrado) {
+    const ok = mes.meta != null && mes.realizado >= mes.meta
+    return (
+      <div className={`mb-4 rounded-xl border px-5 py-4 ${ok ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Mês encerrado — vendas total</div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
+          {brl0(mes.realizado)} <span className="text-base font-normal text-slate-500">de {brl0(mes.meta)} ({mes.meta ? fmtPct(mes.realizado / mes.meta, 0) : '—'})</span>
+        </div>
+      </div>
+    )
+  }
+
+  const blocos = [
+    dez && {
+      titulo: `Por dia para bater a ${dez.numero}ª dezena (${dez.inicio}–${dez.fim})`,
+      ind: dez.acumulado.vendasTotal,
+      dias: uteis(dez.inicio, dez.fim),
+      nota: dez.numero > 1 ? 'inclui o que faltou das dezenas anteriores' : null,
+      extra: null as string | null,
+    },
+    {
+      titulo: 'Por dia para bater a meta do mês',
+      ind: mes,
+      dias: p.diasRestantes,
+      nota: null as string | null,
+      extra: superDia != null ? `Super meta: ${brl0(superDia)}/dia` : null,
+    },
+  ].filter(Boolean) as { titulo: string; ind: Indicador; dias: number; nota: string | null; extra: string | null }[]
+
+  return (
+    <div className="mb-4 grid gap-3 md:grid-cols-2">
+      {blocos.map((b) => {
+        const batida = b.ind.restante != null && b.ind.restante <= 0
+        const pct = b.ind.meta ? Math.min(b.ind.realizado / b.ind.meta, 1) : 0
+        return (
+          <div key={b.titulo} className={`rounded-xl border px-5 py-4 shadow-sm ${batida ? 'border-emerald-200 bg-emerald-50' : 'border-brand-200 bg-brand-50'}`}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-brand-700">{b.titulo}</div>
+            <div className={`mt-1 text-3xl font-bold tabular-nums ${batida ? 'text-emerald-700' : 'text-slate-900'}`}>
+              {batida ? 'Meta batida ✓' : b.ind.metaDia != null ? <>{brl0(b.ind.metaDia)}<span className="text-base font-medium text-slate-500"> /dia</span></> : '—'}
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+              <div className={`h-full rounded-full ${batida ? 'bg-emerald-500' : 'bg-brand-600'}`} style={{ width: `${pct * 100}%` }} />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-600">
+              <span>Vendido <b className="tabular-nums text-slate-800">{brl0(b.ind.realizado)}</b> de {brl0(b.ind.meta)}</span>
+              {!batida && <span>Faltam <b className="tabular-nums text-slate-800">{brl0(b.ind.restante)}</b> em {b.dias} {b.dias === 1 ? 'dia útil' : 'dias úteis'}</span>}
+              {b.extra && <span>{b.extra}</span>}
+              {b.nota && <span className="text-slate-500">({b.nota})</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 function Kpi({ label, i, fmt, extra }: { label: string; i: Indicador; fmt: (v: number | null) => string; extra?: ReactNode }) {
   const pct = i.meta ? Math.min(i.realizado / i.meta, 1) : 0
