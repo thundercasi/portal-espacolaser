@@ -374,8 +374,8 @@ function QuadroDezenas({ p }: { p: TPainel }) {
 function TabelaDiaria({ p }: { p: TPainel }) {
   const cols = p.colunas
   // tabela compacta, para caber na tela sem rolagem horizontal
-  const td = 'px-1.5 py-1 text-xs whitespace-nowrap text-right'
-  const th = 'px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap text-right'
+  const td = 'px-1.5 py-1 text-sm whitespace-nowrap text-right'
+  const th = 'px-1.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap text-right'
   const sep = 'border-l border-slate-200'
   // cor de cada grupo de colunas (cabeçalho e rodapé)
   const G = {
@@ -410,7 +410,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
   const Par = ({ l, a, forte, corL = '', corA = '' }: { l: string | number; a: string | number; forte?: boolean; corL?: string; corA?: string }) => (
     <span className="inline-flex flex-col items-end leading-tight">
       <span className={`${forte ? 'font-semibold' : ''} ${corL}`}>{l === 0 ? '' : l}</span>
-      <span className={`text-[10px] ${corA || 'text-slate-400'}`}>{a === 0 ? '' : a}</span>
+      <span className={`text-xs ${corA || 'text-sky-600'}`}>{a === 0 ? '' : a}</span>
     </span>
   )
 
@@ -429,7 +429,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
     const v = (i: Indicador, f: (x: number | null) => string = dx) => fmtRes(r.nome, i, f)
     return (
       <tr key={prefixo + r.nome} className={`${classe} ${idx === 0 ? 'border-t border-slate-200' : ''}`}>
-        <td className={`${td} !text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500`}>{r.nome}</td>
+        <td className={`${td} !text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500`}>{r.nome}</td>
         {cols.map((c, k) => <td key={c.chave} className={`${td} ${k === 0 ? sep : ''}`}><Par l={v(conj.leads[c.chave])} a={v(conj.agend[c.chave])} corL={cor(r.nome, conj.leads[c.chave])} corA={cor(r.nome, conj.agend[c.chave])} /></td>)}
         <td className={`${td} ${sep}`}><Par l={v(conj.leadsTotal)} a={v(conj.agendTotal)} forte corL={cor(r.nome, conj.leadsTotal)} corA={cor(r.nome, conj.agendTotal)} /></td>
         <td className={`${td} ${sep} ${cor(r.nome, conj.avaliacoes)}`}>{v(conj.avaliacoes)}</td>
@@ -447,7 +447,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
     <div className="card mt-4 overflow-x-auto">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-4 py-3">
         <span className="text-sm font-semibold">Dia a dia</span>
-        <span className="text-xs text-slate-500">Por atendente: <b className="text-slate-700">leads</b> em cima, <span className="text-slate-400">agendamentos criados</span> embaixo · valores em R$</span>
+        <span className="text-xs text-slate-500">Por atendente: <b className="text-slate-700">leads</b> em cima, <b className="text-sky-600">agendamentos criados</b> embaixo · valores em R$</span>
       </div>
       <table className="w-full tabular-nums">
         <thead className="bg-slate-50">
