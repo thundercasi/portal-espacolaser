@@ -192,39 +192,6 @@ export function calcularPainel(args: {
     : (Number(x.meta_agendamentos) * Number(x.taxa_comparecimento) * Number(x.taxa_conversao) * Number(x.ticket_medio)) / (Number(x.share_avaliacoes) || 1))
   const superMeta = tot((x) => Number(x.super_meta))
 
-  const indicador = (serie: number[], meta: number | null): Indicador => {
-    const realizado = soma(serie)
-    const restante = meta == null ? null : meta - realizado
-    return {
-      realizado,
-      meta,
-      restante,
-      metaDia: restante == null || !diasRestantes ? null : Math.max(restante, 0) / diasRestantes,
-      tendencia: diasPassados ? (realizado / diasPassados) * diasUteis : null,
-    }
-  }
-  const participantes = colunas.filter((c) => c.participaMeta).length
-  const metaPorPessoa = (total: number, c: Coluna) => (temMeta ? (c.participaMeta && participantes ? total / participantes : 0) : null)
-
-  const leadsTotalSerie = vetor(n), agendTotalSerie = vetor(n)
-  for (const c of colunas) for (let d = 1; d <= n; d++) { leadsTotalSerie[d] += leads[c.chave][d]; agendTotalSerie[d] += agend[c.chave][d] }
-
-  const ind = {
-    leads: Object.fromEntries(colunas.map((c) => [c.chave, indicador(leads[c.chave], metaPorPessoa(metaLeads, c))])),
-    agend: Object.fromEntries(colunas.map((c) => [c.chave, indicador(agend[c.chave], metaPorPessoa(metaAgend, c))])),
-    leadsTotal: indicador(leadsTotalSerie, temMeta ? metaLeads : null),
-    agendTotal: indicador(agendTotalSerie, temMeta ? metaAgend : null),
-    avaliacoes: indicador(avaliacoes, temMeta ? metaAgend : null),
-    presencas: indicador(presencas, temMeta ? metaPres : null),
-    vendasAvQtd: indicador(vendasAvQtd, temMeta ? metaVendasQtd : null),
-    vendasAvValor: indicador(vendasAvValor, temMeta ? metaVendasAv : null),
-    vendasTotal: indicador(vendasTotal, temMeta ? metaTotal : null),
-  }
-
-  // ---------------------------------------------------------------------
-  // Dezenas (1–10, 11–20, 21–fim; em meses de 31 dias, 1–11, 12–21, 22–31). Como na planilha: leads e agendamentos criados
-  // dividem a meta em 3 partes iguais; os demais indicadores usam os pesos das dezenas.
-  // ---------------------------------------------------------------------
   const pesos = (x: Meta) => (x.pesos_dezenas?.length === 3 ? x.pesos_dezenas.map(Number) : PESOS_DEZENAS_PADRAO)
   const porDezena = (f: (x: Meta) => number, igual: boolean) =>
     [0, 1, 2].map((k) => metasSel.reduce((s, x) => s + f(x) * (igual ? 1 / 3 : pesos(x)[k]), 0))
@@ -241,6 +208,66 @@ export function calcularPainel(args: {
   }
   // meses de 31 dias: 1–11, 12–21, 22–31; demais: 1–10, 11–20, 21–fim
   const limites: [number, number][] = n === 31 ? [[1, 11], [12, 21], [22, 31]] : [[1, 10], [11, 20], [21, n]]
+
+  // Tendência = projeção do realizado até o fim do mês, respeitando os pesos das dezenas:
+  // parte do mês que já deveria ter acontecido = Σ peso da dezena × fração dos dias úteis dela já passados (antes de hoje).
+  const fracPassada = limites.map(([a, b]) => {
+    let total = 0, passados = 0
+    for (let d = a; d <= b; d++) if (util[d]) { total++; if (d < diaHoje) passados++ }
+    return total ? passados / total : (diaHoje > b ? 1 : 0)
+  })
+  /** pesos efetivos de um indicador = metas por dezena normalizadas (combina as unidades pela meta de cada uma) */
+  const pesosDe = (m: number[], igual: boolean) => {
+    const t = m.reduce((a, b) => a + b, 0)
+    return t > 0 ? m.map((x) => x / t) : igual ? [1 / 3, 1 / 3, 1 / 3] : PESOS_DEZENAS_PADRAO
+  }
+  const tendenciaDe = (realizado: number, pesosK: number[]) => {
+    const frac = pesosK.reduce((s, p, k) => s + p * fracPassada[k], 0)
+    return frac > 0 ? realizado / frac : null
+  }
+  const P = {
+    igual: pesosDe(mDez.leads, true),
+    agend: pesosDe(mDez.agend, true),
+    avaliacoes: pesosDe(mDez.avaliacoes, false),
+    presencas: pesosDe(mDez.presencas, false),
+    vendasAvQtd: pesosDe(mDez.vendasAvQtd, false),
+    vendasAvValor: pesosDe(mDez.vendasAvValor, false),
+    vendasTotal: pesosDe(mDez.vendasTotal, false),
+  }
+
+  const indicador = (serie: number[], meta: number | null, pesosK: number[]): Indicador => {
+    const realizado = soma(serie)
+    const restante = meta == null ? null : meta - realizado
+    return {
+      realizado,
+      meta,
+      restante,
+      metaDia: restante == null || !diasRestantes ? null : Math.max(restante, 0) / diasRestantes,
+      tendencia: tendenciaDe(realizado, pesosK),
+    }
+  }
+  const participantes = colunas.filter((c) => c.participaMeta).length
+  const metaPorPessoa = (total: number, c: Coluna) => (temMeta ? (c.participaMeta && participantes ? total / participantes : 0) : null)
+
+  const leadsTotalSerie = vetor(n), agendTotalSerie = vetor(n)
+  for (const c of colunas) for (let d = 1; d <= n; d++) { leadsTotalSerie[d] += leads[c.chave][d]; agendTotalSerie[d] += agend[c.chave][d] }
+
+  const ind = {
+    leads: Object.fromEntries(colunas.map((c) => [c.chave, indicador(leads[c.chave], metaPorPessoa(metaLeads, c), P.igual)])),
+    agend: Object.fromEntries(colunas.map((c) => [c.chave, indicador(agend[c.chave], metaPorPessoa(metaAgend, c), P.agend)])),
+    leadsTotal: indicador(leadsTotalSerie, temMeta ? metaLeads : null, P.igual),
+    agendTotal: indicador(agendTotalSerie, temMeta ? metaAgend : null, P.agend),
+    avaliacoes: indicador(avaliacoes, temMeta ? metaAgend : null, P.avaliacoes),
+    presencas: indicador(presencas, temMeta ? metaPres : null, P.presencas),
+    vendasAvQtd: indicador(vendasAvQtd, temMeta ? metaVendasQtd : null, P.vendasAvQtd),
+    vendasAvValor: indicador(vendasAvValor, temMeta ? metaVendasAv : null, P.vendasAvValor),
+    vendasTotal: indicador(vendasTotal, temMeta ? metaTotal : null, P.vendasTotal),
+  }
+
+  // ---------------------------------------------------------------------
+  // Dezenas (1–10, 11–20, 21–fim; em meses de 31 dias, 1–11, 12–21, 22–31). Como na planilha: leads e agendamentos criados
+  // dividem a meta em 3 partes iguais; os demais indicadores usam os pesos das dezenas.
+  // ---------------------------------------------------------------------
   const somaDias = (serie: number[], a: number, b: number) => { let t = 0; for (let d = a; d <= b; d++) t += serie[d]; return t }
   const uteisRestantes = (a: number, b: number) => { let t = 0; for (let d = Math.max(a, diaHoje); d <= b; d++) if (util[d]) t++; return t }
   const indPeriodo = (serie: number[], meta: number | null, a: number, b: number): Indicador => {

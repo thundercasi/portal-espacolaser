@@ -32,7 +32,7 @@ Publicar: Vercel, build `npm run build`, pasta `dist`, variáveis `VITE_SUPABASE
 - **Avaliações**: agendamentos da unidade pela data agendada; **presenças** = status Finalizado ou Presente.
 - **Venda de avaliação**: origem INDIQUE AMIGO ou FACEBOOK / INSTAGRAM (`ORIGENS_AVALIACAO` em `src/lib/painel.ts`); quantidade = vendas com valor líquido > 0.
 - **Metas**: leads e agendamentos divididos igualmente entre as atendentes que participam da meta; presenças = agendamentos × comparecimento; vendas = presenças × conversão; R$ avaliação = vendas × ticket; R$ total = meta de faturamento (ou R$ avaliação ÷ share).
-- **Meta/dia** = restante ÷ dias úteis de hoje até o fim do mês. **Tendência** = realizado ÷ dias úteis já passados (sem hoje) × dias úteis do mês.
+- **Meta/dia** = restante ÷ dias úteis de hoje até o fim do mês. **Tendência** = realizado ÷ parte do mês que já deveria ter acontecido, onde essa parte = Σ (peso da dezena × fração dos dias úteis da dezena já passados, sem hoje). Leads e agendamentos usam pesos iguais (1/3); os demais, os pesos das dezenas cadastrados em Metas (com várias unidades, combinados pela meta de cada uma). A planilha original usava uma projeção linear.
 - Dias úteis: segunda a sábado; feriados e domingos abertos são ajustados em Metas.
 
 Diferenças em relação à planilha:
