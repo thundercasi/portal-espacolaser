@@ -77,6 +77,8 @@ export interface Painel {
   superMeta: number | null
   temMeta: boolean
   dezenas: Dezena[]
+  /** parte acumulada da meta de R$ total esperada até o fim de cada dia (índice = dia; 0 a 1), pelos pesos das dezenas */
+  curvaVendasTotal: number[]
 }
 
 const soma = (a: number[]) => a.reduce((s, v) => s + v, 0)
@@ -235,6 +237,19 @@ export function calcularPainel(args: {
     vendasTotal: pesosDe(mDez.vendasTotal, false),
   }
 
+  // curva esperada: em cada dezena, o peso dela é distribuído igualmente pelos seus dias úteis
+  const curvaDe = (pesosK: number[]) => {
+    const curva = Array<number>(n + 1).fill(0)
+    for (let d = 1; d <= n; d++) {
+      curva[d] = limites.reduce((s, [a, b], k) => {
+        let total = 0, ate = 0
+        for (let x = a; x <= b; x++) if (util[x]) { total++; if (x <= d) ate++ }
+        return s + pesosK[k] * (total ? ate / total : d >= b ? 1 : 0)
+      }, 0)
+    }
+    return curva
+  }
+
   const indicador = (serie: number[], meta: number | null, pesosK: number[]): Indicador => {
     const realizado = soma(serie)
     const restante = meta == null ? null : meta - realizado
@@ -314,6 +329,7 @@ export function calcularPainel(args: {
     superMeta: temMeta && superMeta > 0 ? superMeta : null,
     temMeta,
     dezenas,
+    curvaVendasTotal: curvaDe(P.vendasTotal),
   }
 }
 

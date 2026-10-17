@@ -273,18 +273,27 @@ function Funil({ p }: { p: TPainel }) {
 function Grafico({ p }: { p: TPainel }) {
   const dados = useMemo(() => {
     const meta = p.ind.vendasTotal.meta
-    let acum = 0, uteis = 0
+    const tend = p.ind.vendasTotal.tendencia
+    const mesAberto = p.diaHoje >= 1 && p.diaHoje <= p.diasNoMes
+    let acum = 0
     const out = []
     for (let d = 1; d <= p.diasNoMes; d++) {
       acum += p.vendasTotal[d]
-      if (p.util[d]) uteis++
-      out.push({ dia: d, realizado: acum, ritmo: meta != null && p.diasUteis ? (meta * uteis) / p.diasUteis : null })
+      out.push({
+        dia: d,
+        // realizado só até hoje; esperado = meta distribuída pelos pesos das dezenas e dias úteis
+        realizado: p.diaHoje === 0 || d > p.diaHoje ? null : acum,
+        esperado: meta != null ? meta * p.curvaVendasTotal[d] : null,
+        // tendência: do último dia fechado (ontem) até o fim do mês, no mesmo formato da curva esperada
+        tendencia: mesAberto && tend != null && d >= p.diaHoje - 1 ? tend * p.curvaVendasTotal[d] : null,
+      })
     }
     return out
   }, [p])
+  const nomes: Record<string, string> = { realizado: 'Realizado', esperado: 'Esperado', tendencia: 'Tendência' }
   return (
     <div className="card p-4">
-      <div className="mb-3 text-sm font-semibold">Vendas acumuladas × ritmo da meta</div>
+      <div className="mb-3 text-sm font-semibold">Vendas acumuladas × esperado × tendência</div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={dados} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
@@ -292,15 +301,17 @@ function Grafico({ p }: { p: TPainel }) {
             <XAxis dataKey="dia" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} interval={4} />
             <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} width={48}
               tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
-            <Tooltip formatter={(v, n) => [brl0(Number(v)), n === 'realizado' ? 'Realizado' : 'Ritmo da meta']} labelFormatter={(d) => `Dia ${d}`} />
-            <Area type="monotone" dataKey="realizado" stroke="#db2777" strokeWidth={2} fill="#fce7f3" fillOpacity={0.6} />
-            <Line type="monotone" dataKey="ritmo" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={false} />
+            <Tooltip formatter={(v, n) => [brl0(Number(v)), nomes[String(n)] ?? String(n)]} labelFormatter={(d) => `Dia ${d}`} />
+            <Area type="monotone" dataKey="realizado" stroke="#db2777" strokeWidth={2} fill="#fce7f3" fillOpacity={0.6} connectNulls={false} />
+            <Line type="monotone" dataKey="esperado" stroke="#64748b" strokeWidth={1.5} dot={false} />
+            <Line type="monotone" dataKey="tendencia" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex gap-4 text-xs text-slate-500">
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
         <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-brand-600" />Realizado</span>
-        <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t border-dashed border-slate-400" />Ritmo da meta (por dia útil)</span>
+        <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-slate-500" />Esperado (meta pelos pesos das dezenas)</span>
+        <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-2 border-dashed border-amber-500" />Tendência</span>
       </div>
     </div>
   )
