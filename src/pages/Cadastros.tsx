@@ -73,26 +73,56 @@ const PERFIS: { valor: Perfil; nome: string; descricao: string }[] = [
   { valor: 'consulta', nome: 'Consulta', descricao: 'só vê o Painel' },
 ]
 
+type Membro = { email: string; perfil: Perfil; unidades: string[] | null }
+
+/** unidades que o usuário de Consulta vê no Painel; nenhuma marcada = todas */
+function EscolhaUnidades({ valor, onChange }: { valor: string[] | null; onChange: (v: string[] | null) => void }) {
+  const { unidades } = useApp()
+  const marcadas = valor ?? []
+  const alternar = (id: string) => {
+    const nova = marcadas.includes(id) ? marcadas.filter((x) => x !== id) : [...marcadas, id]
+    onChange(nova.length ? nova : null)
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span className="text-xs text-slate-500">Unidades:</span>
+      {unidades.map((u) => (
+        <button key={u.id} type="button" onClick={() => alternar(u.id)}
+          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 transition ${marcadas.includes(u.id) ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-slate-600 ring-slate-300 hover:bg-slate-100'}`}>
+          {u.nome}
+        </button>
+      ))}
+      {!marcadas.length && <span className="text-xs text-slate-400">(todas)</span>}
+    </span>
+  )
+}
+
 function Usuarios({ setErro }: SetErro) {
   const { session } = useApp()
   const eu = session?.user.email?.toLowerCase()
-  const [lista, setLista] = useState<{ email: string; perfil: Perfil }[]>([])
+  const [lista, setLista] = useState<Membro[]>([])
   const [email, setEmail] = useState('')
   const [perfil, setPerfil] = useState<Perfil>('consulta')
-  const carregar = () => supabase.from('membros').select('email, perfil').order('email').then(({ data }) => setLista((data ?? []) as { email: string; perfil: Perfil }[]))
+  const [unidadesNovo, setUnidadesNovo] = useState<string[] | null>(null)
+  const carregar = () => supabase.from('membros').select('email, perfil, unidades').order('email').then(({ data }) => setLista((data ?? []) as Membro[]))
   useEffect(() => { carregar() }, [])
 
   async function adicionar() {
     const e = email.trim().toLowerCase()
     if (!e.includes('@')) return
-    const { error } = await supabase.from('membros').insert({ email: e, perfil })
+    const { error } = await supabase.from('membros').insert({ email: e, perfil, unidades: perfil === 'consulta' ? unidadesNovo : null })
     setErro(error?.message ?? null)
-    if (!error) setEmail('')
+    if (!error) { setEmail(''); setUnidadesNovo(null) }
     carregar()
   }
   async function mudarPerfil(e: string, p: Perfil) {
     const { error } = await supabase.from('membros').update({ perfil: p }).eq('email', e)
     setErro(error?.message ?? null); carregar()
+  }
+  async function mudarUnidades(e: string, unidades: string[] | null) {
+    setLista((l) => l.map((m) => (m.email === e ? { ...m, unidades } : m)))
+    const { error } = await supabase.from('membros').update({ unidades }).eq('email', e)
+    setErro(error?.message ?? null)
   }
   async function remover(e: string) {
     if (!confirm(`Remover o acesso de ${e}?`)) return
@@ -106,13 +136,14 @@ function Usuarios({ setErro }: SetErro) {
         <div className="text-sm font-semibold">Usuários com acesso</div>
         <p className="text-xs text-slate-500">
           A pessoa cria a conta na tela de login com um destes e-mails. <b>Administrador</b> acessa e altera tudo;
-          <b> Consulta</b> só vê o Painel do funil.
+          <b> Consulta</b> só vê o Painel do funil, das unidades marcadas (nenhuma marcada = todas).
         </p>
       </div>
       <ul className="divide-y divide-slate-100">
         {lista.map((m) => (
           <li key={m.email} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm">
             <span className="min-w-56">{m.email}{m.email === eu && <span className="ml-2 text-xs text-slate-400">(você)</span>}</span>
+            {m.perfil === 'consulta' && <EscolhaUnidades valor={m.unidades} onChange={(v) => mudarUnidades(m.email, v)} />}
             <span className="flex items-center gap-2">
               {m.email === eu ? (
                 <span className="text-slate-600">{PERFIS.find((p) => p.valor === m.perfil)?.nome}</span>
@@ -134,6 +165,7 @@ function Usuarios({ setErro }: SetErro) {
           {PERFIS.map((p) => <option key={p.valor} value={p.valor}>{p.nome} — {p.descricao}</option>)}
         </select>
         <button className="btn-primary" onClick={adicionar}><Plus size={16} /> Adicionar</button>
+        {perfil === 'consulta' && <div className="w-full"><EscolhaUnidades valor={unidadesNovo} onChange={setUnidadesNovo} /></div>}
       </div>
     </section>
   )

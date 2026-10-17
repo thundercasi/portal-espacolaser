@@ -51,4 +51,4 @@ Diferenças em relação à planilha:
 ## Perfis de acesso
 
 - **Administrador**: acessa e altera tudo.
-- **Consulta**: só vê o Painel do funil. A restrição também vale no banco (RLS): o perfil Consulta só lê as tabelas do painel e não altera nada; premiações, vendas por vendedor e cancelamentos ficam visíveis apenas para administradores.
+- **Consulta**: só vê o Painel do funil, das unidades marcadas no cadastro do usuário (nenhuma marcada = todas). A restrição também vale no banco (RLS): o perfil Consulta só lê as tabelas do painel e não altera nada; premiações, vendas por vendedor e cancelamentos ficam visíveis apenas para administradores.

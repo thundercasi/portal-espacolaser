@@ -53,9 +53,10 @@ export default function Painel() {
         actions={<MonthPicker value={mes} onChange={setMes} />}
       />
       <div className="mb-5 flex flex-wrap gap-1.5">
-        {[{ id: 'todas', nome: 'Todas' }, ...ativas].map((u) => (
+        {/* quem só tem acesso a uma unidade não precisa da aba "Todas" */}
+        {(ativas.length > 1 ? [{ id: 'todas', nome: 'Todas' }, ...ativas] : ativas).map((u) => (
           <button key={u.id} onClick={() => setUnidadeId(u.id)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${unidadeId === u.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'}`}>
+            className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${unidadeId === u.id || ativas.length === 1 ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'}`}>
             {u.nome}
           </button>
         ))}
