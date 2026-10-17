@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { calcularPainel, ORIGENS_AVALIACAO, type ConjuntoIndicadores, type Indicador, type Painel as TPainel } from '../lib/painel'
+import { calcularPainel, metasNoNivel, ORIGENS_AVALIACAO, type NivelMeta, type ConjuntoIndicadores, type Indicador, type Painel as TPainel } from '../lib/painel'
 import { fimMes, fmtBRL, fmtNum, fmtPct, hojeISO, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import type { LinhaPainel, Meta } from '../lib/types'
 import { ErrorBox, MonthPicker, PageHeader } from '../components/ui'
@@ -16,6 +16,11 @@ export default function Painel() {
   const { unidades, colaboradores, usuarios, admin } = useApp()
   const [mes, setMes] = useState(mesAtual())
   const [unidadeId, setUnidadeId] = useState<string>('todas')
+  // nível das metas exibidas (lembrado neste navegador)
+  const [nivel, setNivelState] = useState<NivelMeta>(() => {
+    try { return localStorage.getItem('painel:nivel') === 'super' ? 'super' : 'meta' } catch { return 'meta' }
+  })
+  const setNivel = (n: NivelMeta) => { setNivelState(n); try { localStorage.setItem('painel:nivel', n) } catch { /* sem armazenamento */ } }
   const [linhas, setLinhas] = useState<LinhaPainel[] | null>(null)
   const [metas, setMetas] = useState<Meta[]>([])
   const [ultimaImport, setUltimaImport] = useState<string | null>(null)
@@ -39,18 +44,32 @@ export default function Painel() {
   }, [mes])
 
   const ativas = useMemo(() => unidades.filter((u) => u.ativo), [unidades])
+  const sel = useMemo(() => (unidadeId === 'todas' ? ativas : ativas.filter((u) => u.id === unidadeId)), [ativas, unidadeId])
+  const nivelMetas = useMemo(() => metasNoNivel(metas, nivel), [metas, nivel])
   const p = useMemo(() => {
     if (!linhas) return null
-    const sel = unidadeId === 'todas' ? ativas : ativas.filter((u) => u.id === unidadeId)
-    return calcularPainel({ mes, hoje: hojeISO(), unidades: sel, colaboradores, usuarios, metas, linhas })
-  }, [linhas, metas, mes, unidadeId, ativas, colaboradores, usuarios])
+    return calcularPainel({ mes, hoje: hojeISO(), unidades: sel, colaboradores, usuarios, metas: nivelMetas.metas, linhas })
+  }, [linhas, nivelMetas, mes, sel, colaboradores, usuarios])
+  // unidades selecionadas que têm meta no mês mas não têm super meta
+  const semSuper = sel.filter((u) => nivelMetas.semSuper.includes(u.id)).map((u) => u.nome)
+  const fatoresSel = sel.map((u) => nivelMetas.fatores.get(u.id)).filter((x): x is number => x != null)
 
   return (
     <div>
       <PageHeader
         title="Painel do funil"
         subtitle={p ? `${nomeMes(mes)} · ${p.diasUteis} dias úteis, ${p.diasPassados} já passaram${ultimaImport ? ` · última importação ${new Date(ultimaImport).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}` : nomeMes(mes)}
-        actions={<MonthPicker value={mes} onChange={setMes} />}
+        actions={<>
+          <div className="flex rounded-lg bg-white p-0.5 ring-1 ring-slate-200" role="group" aria-label="Metas exibidas">
+            {([['meta', 'Meta'], ['super', 'Super meta']] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setNivel(k)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${nivel === k ? (k === 'super' ? 'bg-amber-500 text-white' : 'bg-brand-600 text-white') : 'text-slate-600 hover:bg-slate-100'}`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          <MonthPicker value={mes} onChange={setMes} />
+        </>}
       />
       <div className="mb-5 flex flex-wrap gap-1.5">
         {/* quem só tem acesso a uma unidade não precisa da aba "Todas" */}
@@ -64,6 +83,15 @@ export default function Painel() {
       <ErrorBox msg={erro} />
       {!p ? <div className="text-sm text-slate-500">Carregando…</div> : (
         <>
+          {nivel === 'super' && p.temMeta && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Exibindo a <b>super meta</b>
+              {fatoresSel.length > 0 && <>: metas de leads, agendamentos, presenças e vendas {fatoresSel.length === 1
+                ? `+${fmtPct(fatoresSel[0] - 1, 0)}`
+                : `+${fmtPct(Math.min(...fatoresSel) - 1, 0)} a +${fmtPct(Math.max(...fatoresSel) - 1, 0)}`} sobre a meta (proporção super meta ÷ meta de faturamento)</>}.
+              {semSuper.length > 0 && <> Sem super meta cadastrada (mostrando a meta normal): <b>{semSuper.join(', ')}</b>.</>}
+            </div>
+          )}
           {!p.temMeta && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               Sem metas cadastradas para {nomeMes(mes).toLowerCase()}. {admin && <Link to="/metas" className="font-medium underline">Cadastrar metas</Link>}
@@ -74,7 +102,7 @@ export default function Painel() {
               Nenhum dado importado para este mês. {admin && <Link to="/importar" className="font-medium text-brand-700 underline">Importar exportações</Link>}
             </div>
           )}
-          <DestaqueMetaDiaria p={p} />
+          <DestaqueMetaDiaria p={p} nivel={nivel} />
           <Kpis p={p} />
           <div className="mt-4 grid gap-4 xl:grid-cols-5">
             <div className="xl:col-span-3"><Funil p={p} /></div>
@@ -91,7 +119,7 @@ export default function Painel() {
 // ---------------------------------------------------------------------------
 
 /** Destaque no topo: quanto precisa vender por dia para bater a dezena atual e o mês (R$ vendas total). */
-function DestaqueMetaDiaria({ p }: { p: TPainel }) {
+function DestaqueMetaDiaria({ p, nivel }: { p: TPainel; nivel: NivelMeta }) {
   if (!p.temMeta) return null
   const encerrado = p.diaHoje > p.diasNoMes
   const futuro = p.diaHoje === 0
@@ -114,18 +142,18 @@ function DestaqueMetaDiaria({ p }: { p: TPainel }) {
 
   const blocos = [
     dez && {
-      titulo: `Por dia para bater a ${dez.numero}ª dezena (${dez.inicio}–${dez.fim})`,
+      titulo: `Por dia para bater a ${nivel === 'super' ? 'super meta da ' : ''}${dez.numero}ª dezena (${dez.inicio}–${dez.fim})`,
       ind: dez.acumulado.vendasTotal,
       dias: uteis(dez.inicio, dez.fim),
       nota: dez.numero > 1 ? 'inclui o que faltou das dezenas anteriores' : null,
       extra: null as string | null,
     },
     {
-      titulo: 'Por dia para bater a meta do mês',
+      titulo: nivel === 'super' ? 'Por dia para bater a super meta do mês' : 'Por dia para bater a meta do mês',
       ind: mes,
       dias: p.diasRestantes,
       nota: null as string | null,
-      extra: superDia != null ? `Super meta: ${brl0(superDia)}/dia` : null,
+      extra: nivel === 'meta' && superDia != null ? `Super meta: ${brl0(superDia)}/dia` : null,
     },
   ].filter(Boolean) as { titulo: string; ind: Indicador; dias: number; nota: string | null; extra: string | null }[]
 

@@ -60,3 +60,7 @@ O mês é dividido em 3 dezenas: 1–10, 11–20 e 21–fim (em meses de 31 dias
 ## De/para de usuários
 
 Configurado em Cadastros → Equipe (fica guardado no sistema). Para cada registro (lead, agendamento, venda), a pessoa é escolhida pela unidade e pela data: 1) vínculo com período que cobre a data (o de período mais curto, se houver mais de um); 2) vínculo permanente; 3) pessoa com o mesmo nome do usuário. O relatório de vendas por vendedor com "Data de Pagamento" é atribuído por dia; sem essa coluna, vale o vínculo do último dia do mês. Reimportar vendas por vendedor substitui o mesmo período e unidade.
+
+## Meta × Super meta no Painel
+
+O seletor no topo do Painel alterna entre a meta e a super meta. Na super meta, as metas de leads e agendamentos (e, por consequência, presenças, vendas e R$) sobem na proporção super meta ÷ meta de faturamento de cada unidade; taxas, ticket e pesos das dezenas não mudam. Unidades sem super meta cadastrada continuam com a meta normal (o painel avisa).

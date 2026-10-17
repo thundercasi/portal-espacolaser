@@ -289,3 +289,31 @@ export function calcularPainel(args: {
     dezenas,
   }
 }
+
+export type NivelMeta = 'meta' | 'super'
+
+/** meta de R$ total de uma unidade: meta de faturamento ou, se zerada, a derivada do funil pelo share */
+const metaFaturamentoDe = (x: Meta) => Number(x.meta_faturamento) > 0
+  ? Number(x.meta_faturamento)
+  : (Number(x.meta_agendamentos) * Number(x.taxa_comparecimento) * Number(x.taxa_conversao) * Number(x.ticket_medio)) / (Number(x.share_avaliacoes) || 1)
+
+/**
+ * Metas no nível escolhido. Na super meta, todas as metas do funil (leads, agendamentos e,
+ * por consequência, presenças, vendas e R$) sobem na proporção super meta ÷ meta de faturamento
+ * da unidade; taxas, ticket e pesos das dezenas não mudam.
+ * Unidades sem super meta cadastrada ficam com a meta normal e são listadas em `semSuper`.
+ */
+export function metasNoNivel(metas: Meta[], nivel: NivelMeta): { metas: Meta[]; semSuper: string[]; fatores: Map<string, number> } {
+  const fatores = new Map<string, number>()
+  if (nivel === 'meta') return { metas, semSuper: [], fatores }
+  const semSuper: string[] = []
+  const out = metas.map((x) => {
+    const base = metaFaturamentoDe(x)
+    const sup = Number(x.super_meta)
+    if (!(sup > 0) || !(base > 0)) { semSuper.push(x.unidade_id); return x }
+    const f = sup / base
+    fatores.set(x.unidade_id, f)
+    return { ...x, meta_leads: Number(x.meta_leads) * f, meta_agendamentos: Number(x.meta_agendamentos) * f, meta_faturamento: sup }
+  })
+  return { metas: out, semSuper, fatores }
+}
