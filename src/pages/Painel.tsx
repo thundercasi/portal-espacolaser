@@ -249,7 +249,7 @@ function Funil({ p }: { p: TPainel }) {
             <th className="th text-right">Tendência</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody>
           {linhas.map((l) => {
             const ok = l.i && l.i.meta != null && l.i.tendencia != null ? l.i.tendencia >= l.i.meta : null
             return (
@@ -373,7 +373,47 @@ function QuadroDezenas({ p }: { p: TPainel }) {
 
 function TabelaDiaria({ p }: { p: TPainel }) {
   const cols = p.colunas
+  // tabela compacta, para caber na tela sem rolagem horizontal
+  const td = 'px-1.5 py-1 text-xs whitespace-nowrap text-right'
+  const th = 'px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap text-right'
+  const sep = 'border-l border-slate-200'
+  // cor de cada grupo de colunas (cabeçalho e rodapé)
+  const G = {
+    funil: { cab: 'bg-brand-100/70 text-brand-700', sub: 'bg-brand-50' },
+    aval: { cab: 'bg-sky-100 text-sky-800', sub: 'bg-sky-50' },
+    vendas: { cab: 'bg-emerald-100 text-emerald-800', sub: 'bg-emerald-50' },
+  }
+  /** cor do valor nos totalizadores: realizado/tendência × meta; restante > 0 = falta */
+  const cor = (nome: string, i: Indicador) => {
+    if (i.meta == null) return ''
+    if (nome === 'Realizado' || nome === 'Tendência') {
+      const v = nome === 'Realizado' ? i.realizado : i.tendencia
+      if (v == null) return ''
+      return v >= i.meta ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'
+    }
+    if (nome === 'Restante' && i.restante != null) return i.restante > 0 ? 'text-red-600' : 'text-emerald-700'
+    return ''
+  }
+  const fmtRes = (nome: string, i: Indicador, f: (v: number | null) => string) => {
+    const v = (base.concat(rodapes).find((r) => r.nome === nome) ?? base[0]).v(i)
+    if (nome === 'Restante' && v != null && v <= 0 && i.meta != null) return '✓'
+    return f(v)
+  }
+  const n0 = (v: number | null | undefined) => (v == null ? '—' : Math.round(v).toLocaleString('pt-BR')) // R$ sem o símbolo
   const pct = (a: number, b: number) => (b ? fmtPct(a / b, 0) : '—')
+  // primeiro nome; se repetir entre as colunas, os dois primeiros nomes
+  const curto = (nome: string) => {
+    const primeiro = nome.split(' ')[0]
+    return cols.filter((c) => c.apelido.split(' ')[0] === primeiro).length > 1 ? nome.split(' ').slice(0, 2).join(' ') : primeiro
+  }
+  /** leads em cima, agendamentos criados embaixo */
+  const Par = ({ l, a, forte, corL = '', corA = '' }: { l: string | number; a: string | number; forte?: boolean; corL?: string; corA?: string }) => (
+    <span className="inline-flex flex-col items-end leading-tight">
+      <span className={`${forte ? 'font-semibold' : ''} ${corL}`}>{l === 0 ? '' : l}</span>
+      <span className={`text-[10px] ${corA || 'text-slate-400'}`}>{a === 0 ? '' : a}</span>
+    </span>
+  )
+
   type Resumo = { nome: string; v: (i: Indicador) => number | null }
   const base: Resumo[] = [
     { nome: 'Realizado', v: (i) => i.realizado },
@@ -382,84 +422,81 @@ function TabelaDiaria({ p }: { p: TPainel }) {
     { nome: 'Meta/dia', v: (i) => i.metaDia },
   ]
   const rodapes: Resumo[] = [...base, { nome: 'Tendência', v: (i) => i.tendencia }]
-  const sep = 'border-l border-slate-200'
   const dias = Array.from({ length: p.diasNoMes }, (_, k) => k + 1)
 
-  const linhasResumo = (conj: ConjuntoIndicadores, lista: Resumo[], prefixo: string, comTaxas: boolean, classe: string) => lista.map((r) => {
+  const linhasResumo = (conj: ConjuntoIndicadores, lista: Resumo[], prefixo: string, comTaxas: boolean, classe: string) => lista.map((r, idx) => {
     const dx = r.nome === 'Realizado' || r.nome === 'Meta' || r.nome === 'Restante' ? int : dec
+    const v = (i: Indicador, f: (x: number | null) => string = dx) => fmtRes(r.nome, i, f)
     return (
-      <tr key={prefixo + r.nome} className={`font-medium ${classe}`}>
-        <td className="td text-left text-xs uppercase tracking-wide text-slate-500">{r.nome}</td>
-        {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(conj.leads[c.chave]))}</td>)}
-        <td className="td">{dx(r.v(conj.leadsTotal))}</td>
-        {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(conj.agend[c.chave]))}</td>)}
-        <td className="td">{dx(r.v(conj.agendTotal))}</td>
-        <td className={`td ${sep}`}>{dx(r.v(conj.avaliacoes))}</td>
-        <td className="td">{dec(r.v(conj.presencas))}</td>
-        <td className="td text-slate-500">{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.comparecimento.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.comparecimento.meta, 0) : ''}</td>
-        <td className={`td ${sep}`}>{dec(r.v(conj.vendasAvQtd))}</td>
-        <td className="td text-slate-500">{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.conversao.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.conversao.meta, 0) : ''}</td>
-        <td className="td">{brl0(r.v(conj.vendasAvValor))}</td>
-        <td className="td">{brl0(r.v(conj.vendasTotal))}</td>
+      <tr key={prefixo + r.nome} className={`${classe} ${idx === 0 ? 'border-t border-slate-200' : ''}`}>
+        <td className={`${td} text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500`}>{r.nome}</td>
+        {cols.map((c, k) => <td key={c.chave} className={`${td} ${k === 0 ? sep : ''}`}><Par l={v(conj.leads[c.chave])} a={v(conj.agend[c.chave])} corL={cor(r.nome, conj.leads[c.chave])} corA={cor(r.nome, conj.agend[c.chave])} /></td>)}
+        <td className={`${td} ${sep}`}><Par l={v(conj.leadsTotal)} a={v(conj.agendTotal)} forte corL={cor(r.nome, conj.leadsTotal)} corA={cor(r.nome, conj.agendTotal)} /></td>
+        <td className={`${td} ${sep} ${cor(r.nome, conj.avaliacoes)}`}>{v(conj.avaliacoes)}</td>
+        <td className={`${td} ${cor(r.nome, conj.presencas)}`}>{v(conj.presencas, dec)}</td>
+        <td className={`${td} text-slate-500`}>{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.comparecimento.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.comparecimento.meta, 0) : ''}</td>
+        <td className={`${td} ${sep} ${cor(r.nome, conj.vendasAvQtd)}`}>{v(conj.vendasAvQtd, dec)}</td>
+        <td className={`${td} text-slate-500`}>{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.conversao.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.conversao.meta, 0) : ''}</td>
+        <td className={`${td} ${cor(r.nome, conj.vendasAvValor)}`}>{v(conj.vendasAvValor, n0)}</td>
+        <td className={`${td} ${cor(r.nome, conj.vendasTotal)}`}>{v(conj.vendasTotal, n0)}</td>
       </tr>
     )
   })
 
   return (
     <div className="card mt-4 overflow-x-auto">
-      <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Dia a dia</div>
-      <table className="w-full text-right">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <span className="text-sm font-semibold">Dia a dia</span>
+        <span className="text-xs text-slate-500">Por atendente: <b className="text-slate-700">leads</b> em cima, <span className="text-slate-400">agendamentos criados</span> embaixo · valores em R$</span>
+      </div>
+      <table className="w-full tabular-nums">
         <thead className="bg-slate-50">
-          <tr className="text-[11px]">
-            <th className="th" />
-            <th className={`th text-center ${sep}`} colSpan={cols.length + 1}>Leads</th>
-            <th className={`th text-center ${sep}`} colSpan={cols.length + 1}>Agendamentos criados</th>
-            <th className={`th text-center ${sep}`} colSpan={3}>Avaliações</th>
-            <th className={`th text-center ${sep}`} colSpan={4}>Vendas</th>
-          </tr>
           <tr>
-            <th className="th">Dia</th>
-            {cols.map((c, k) => <th key={c.chave} className={`th text-right ${k === 0 ? sep : ''}`}>{c.apelido}</th>)}
-            <th className="th text-right">Total</th>
-            {cols.map((c, k) => <th key={c.chave} className={`th text-right ${k === 0 ? sep : ''}`}>{c.apelido}</th>)}
-            <th className="th text-right">Total</th>
-            <th className={`th text-right ${sep}`}>Agend.</th><th className="th text-right">Pres.</th><th className="th text-right">%</th>
-            <th className={`th text-right ${sep}`}>Qtd av</th><th className="th text-right">Conv.</th><th className="th text-right">R$ av</th><th className="th text-right">R$ total</th>
+            <th className={`${th} bg-slate-100`} />
+            <th className={`${th} text-center ${sep} ${G.funil.cab}`} colSpan={cols.length + 1}>Leads / agendamentos criados</th>
+            <th className={`${th} text-center ${sep} ${G.aval.cab}`} colSpan={3}>Avaliações</th>
+            <th className={`${th} text-center ${sep} ${G.vendas.cab}`} colSpan={4}>Vendas (R$)</th>
+          </tr>
+          <tr className="border-b-2 border-slate-200">
+            <th className={`${th} text-left bg-slate-100`}>Dia</th>
+            {cols.map((c, k) => <th key={c.chave} title={c.apelido} className={`${th} ${k === 0 ? sep : ''} ${G.funil.sub}`}>{curto(c.apelido)}</th>)}
+            <th className={`${th} ${sep} ${G.funil.sub}`}>Total</th>
+            <th className={`${th} ${sep} ${G.aval.sub}`}>Agend.</th><th className={`${th} ${G.aval.sub}`}>Pres.</th><th className={`${th} ${G.aval.sub}`}>%</th>
+            <th className={`${th} ${sep} ${G.vendas.sub}`}>Qtd av</th><th className={`${th} ${G.vendas.sub}`}>Conv.</th><th className={`${th} ${G.vendas.sub}`}>Av</th><th className={`${th} ${G.vendas.sub}`}>Total</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 tabular-nums">
+        <tbody className="divide-y divide-slate-100">
           {dias.map((d) => {
             const tl = cols.reduce((s, c) => s + p.leads[c.chave][d], 0)
             const ta = cols.reduce((s, c) => s + p.agend[c.chave][d], 0)
             // subtotal acumulado ao fim da 1ª e da 2ª dezena (o fim do mês fica no rodapé)
             const dez = p.dezenas.find((x) => x.fim === d && x.numero < 3)
             return [
-              <tr key={d} className={p.util[d] ? '' : 'bg-slate-50 text-slate-400'}>
-                <td className="td text-left font-medium">{d}</td>
-                {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{p.leads[c.chave][d] || ''}</td>)}
-                <td className="td font-medium">{tl || ''}</td>
-                {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{p.agend[c.chave][d] || ''}</td>)}
-                <td className="td font-medium">{ta || ''}</td>
-                <td className={`td ${sep}`}>{p.avaliacoes[d] || ''}</td>
-                <td className="td">{p.presencas[d] || ''}</td>
-                <td className="td text-slate-500">{p.avaliacoes[d] ? pct(p.presencas[d], p.avaliacoes[d]) : ''}</td>
-                <td className={`td ${sep}`}>{p.vendasAvQtd[d] || ''}</td>
-                <td className="td text-slate-500">{p.presencas[d] ? pct(p.vendasAvQtd[d], p.presencas[d]) : ''}</td>
-                <td className="td">{p.vendasAvValor[d] ? brl0(p.vendasAvValor[d]) : ''}</td>
-                <td className="td">{p.vendasTotal[d] ? brl0(p.vendasTotal[d]) : ''}</td>
+              <tr key={d} className={`transition-colors hover:bg-amber-50/60 ${d === p.diaHoje ? 'bg-amber-50 font-medium ring-1 ring-inset ring-amber-300' : !p.util[d] ? 'bg-slate-100/70 text-slate-400' : d % 2 ? 'bg-white' : 'bg-slate-50/60'}`}>
+                <td className={`${td} text-left font-semibold ${d === p.diaHoje ? 'text-amber-700' : ''}`}>{d}{d === p.diaHoje && <span className="ml-1 text-[9px] font-medium uppercase">hoje</span>}</td>
+                {cols.map((c, k) => <td key={c.chave} className={`${td} ${k === 0 ? sep : ''}`}><Par l={p.leads[c.chave][d]} a={p.agend[c.chave][d]} /></td>)}
+                <td className={`${td} ${sep}`}><Par l={tl} a={ta} forte /></td>
+                <td className={`${td} ${sep}`}>{p.avaliacoes[d] || ''}</td>
+                <td className={td}>{p.presencas[d] || ''}</td>
+                <td className={`${td} text-slate-500`}>{p.avaliacoes[d] ? pct(p.presencas[d], p.avaliacoes[d]) : ''}</td>
+                <td className={`${td} ${sep}`}>{p.vendasAvQtd[d] || ''}</td>
+                <td className={`${td} text-slate-500`}>{p.presencas[d] ? pct(p.vendasAvQtd[d], p.presencas[d]) : ''}</td>
+                <td className={td}>{p.vendasAvValor[d] ? n0(p.vendasAvValor[d]) : ''}</td>
+                <td className={td}>{p.vendasTotal[d] ? n0(p.vendasTotal[d]) : ''}</td>
               </tr>,
               dez && (
-                <tr key={`dz${dez.numero}`} className="border-t-2 border-brand-100 bg-brand-50">
-                  <td className="td text-left text-xs font-semibold text-brand-700" colSpan={2 * cols.length + 10}>
+                <tr key={`dz${dez.numero}`} className="border-t-2 border-brand-300 bg-brand-100/80">
+                  <td className={`${td} text-left font-semibold text-brand-800`} colSpan={cols.length + 9}>
                     Acumulado até o dia {dez.fim} ({dez.numero === 1 ? '1ª dezena' : '1ª + 2ª dezenas'})
                   </td>
                 </tr>
               ),
-              dez && linhasResumo(dez.acumulado, base, `dz${dez.numero}`, false, 'bg-brand-50/60'),
+              dez && linhasResumo(dez.acumulado, base, `dz${dez.numero}`, false, 'bg-brand-50/70'),
             ]
           })}
         </tbody>
-        <tfoot className="border-t-2 border-slate-200 bg-slate-50 tabular-nums">
+        <tfoot className="border-t-2 border-slate-300 bg-slate-100/80">
+          <tr><td className={`${td} text-left font-semibold text-slate-700`} colSpan={cols.length + 9}>Mês inteiro</td></tr>
           {linhasResumo(p.ind, rodapes, 'mes', true, '')}
         </tfoot>
       </table>

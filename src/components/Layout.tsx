@@ -76,7 +76,7 @@ export default function Layout() {
           <button className="btn-ghost p-1.5" onClick={() => setAberto(true)} aria-label="Menu"><Menu size={20} /></button>
           <span className="font-semibold">Funil Espaçolaser</span>
         </header>
-        <main className="mx-auto max-w-[1400px] p-4 sm:p-6"><Suspense fallback={<div className="text-sm text-slate-500">Carregando…</div>}><Outlet /></Suspense></main>
+        <main className="mx-auto max-w-[1800px] p-4 sm:p-6"><Suspense fallback={<div className="text-sm text-slate-500">Carregando…</div>}><Outlet /></Suspense></main>
       </div>
     </div>
   )
