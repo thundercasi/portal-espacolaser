@@ -37,14 +37,16 @@ window.CF = {
     return null
   },
 
+  // unidade selecionada = nome no topo (#multitabs-unit-name); a classe "current" dos nós não indica a seleção
+  unidadeAtual: () => document.getElementById('multitabs-unit-name')?.textContent.trim() || '',
   async garantirUnidade() {
-    const atual = document.querySelector('.multitabs-unit-node.current')?.dataset.id
-    if (atual === '458') return
+    const alvo = /CASSIANO COLOMBO\/RONNEY/i
+    if (alvo.test(CF.unidadeAtual())) return
     const n = document.querySelector('.multitabs-unit-node[data-id="458"]')
     if (!n) throw new Error('UNIDADE_458_NAO_ENCONTRADA')
     n.click(); n.querySelector('.multitabs-unit-desc')?.click()
-    await CF.esperar(7000)
-    if (document.querySelector('.multitabs-unit-node.current')?.dataset.id !== '458') throw new Error('UNIDADE_NAO_TROCOU')
+    for (let i = 0; i < 10 && !alvo.test(CF.unidadeAtual()); i++) await CF.esperar(2000)
+    if (!alvo.test(CF.unidadeAtual())) throw new Error('UNIDADE_NAO_TROCOU (' + CF.unidadeAtual() + ')')
   },
 
   /** abre Relatórios e os 4 relatórios, se ainda não estiverem abertos */
