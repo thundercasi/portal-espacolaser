@@ -6,6 +6,7 @@ import { normalizar } from '../lib/importar'
 import { addMeses, hojeISO, inicioMes, mesAtual } from '../lib/format'
 import { FUNCOES, type Colaborador, type ColaboradorUsuario, type Funcao } from '../lib/types'
 import { fmtData } from '../lib/format'
+import SeletorUsuarios, { type OpcaoUsuario } from './SeletorUsuarios'
 
 const REDE = 'rede'
 const separar = (texto: string) => [...new Set(texto.split(/[,;\n]/).map(normalizar).filter(Boolean))]
@@ -15,7 +16,8 @@ const permanente = (u: ColaboradorUsuario) => !u.vigente_de && !u.vigente_ate
 export default function Equipe({ setErro }: { setErro: (s: string | null) => void }) {
   const { unidades, colaboradores, usuarios, reloadCadastros } = useApp()
   const [sel, setSel] = useState('')
-  const [novo, setNovo] = useState({ nome: '', funcao: 'Consultora' as Funcao, usuarios: '' })
+  const [novo, setNovo] = useState({ nome: '', funcao: 'Consultora' as Funcao, usuarios: [] as string[] })
+  const [opcoes, setOpcoes] = useState<OpcaoUsuario[]>([])
   const [semVinculo, setSemVinculo] = useState<{ usuario: string; origens: string; qtd: number }[]>([])
   const unidadeId = sel || unidades[0]?.id || ''
   const rede = unidadeId === REDE
@@ -26,6 +28,23 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
   const comPeriodo = usuarios.filter((u) => u.unidade_id === unidadeId && !permanente(u))
     .sort((a, b) => a.usuario.localeCompare(b.usuario) || (a.vigente_de ?? '').localeCompare(b.vigente_de ?? ''))
   const [novoPeriodo, setNovoPeriodo] = useState({ usuario: '', colaborador_id: '', de: '', ate: '' })
+  // quem já tem o usuário como vínculo permanente nesta unidade (para avisar na lista)
+  const donoDe = (excetoId: string | null) => (chave: string) => {
+    const v = usuarios.find((u) => u.unidade_id === unidadeId && u.usuario === chave && permanente(u) && u.colaborador_id !== excetoId)
+    return v ? colaboradores.find((c) => c.id === v.colaborador_id)?.nome ?? null : null
+  }
+
+  // usuários com alguma interação com a unidade (leads, agendamentos, vendas por vendedor)
+  useEffect(() => {
+    let vivo = true
+    if (!unidade) { setOpcoes([]); return }
+    supabase.rpc('usuarios_da_unidade', { p_unidade: unidade.id }).then(({ data, error }) => {
+      if (!vivo) return
+      if (error) setErro(error.message)
+      setOpcoes(((data ?? []) as OpcaoUsuario[]).map((o) => ({ ...o, qtd: Number(o.qtd) })))
+    })
+    return () => { vivo = false }
+  }, [unidade, setErro])
 
   // usuários que aparecem nos dados desta unidade nos últimos 2 meses e ainda não têm dono
   useEffect(() => {
@@ -52,9 +71,9 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
     const { error } = await supabase.from('colaboradores').update(patch).eq('id', id)
     setErro(error?.message ?? null); reloadCadastros()
   }
-  async function salvarUsuarios(c: Colaborador, texto: string) {
+  async function salvarUsuarios(c: Colaborador, chaves: string[]) {
     if (!c.unidade_id) return
-    const novos = separar(texto).sort()
+    const novos = [...new Set(chaves)].sort()
     if (novos.join('|') === usuariosDe(c).join('|')) return
     const erro = await gravarPermanentes(c.unidade_id, c.id, novos, true)
     setErro(erro)
@@ -103,7 +122,7 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
       const e = await gravarPermanentes(unidadeId, data.id, us, false)
       if (e) { setErro(e); return }
     }
-    setErro(null); setNovo({ nome: '', funcao: 'Consultora', usuarios: '' })
+    setErro(null); setNovo({ nome: '', funcao: 'Consultora', usuarios: [] })
     reloadCadastros()
   }
   async function remover(c: Colaborador) {
@@ -153,8 +172,7 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
               </td>
               {!rede && (
                 <td className="td">
-                  <input key={usuariosDe(c).join(',')} className="input min-w-64" placeholder="ex.: karina andrade"
-                    defaultValue={usuariosDe(c).join(', ')} onBlur={(e) => salvarUsuarios(c, e.target.value)} />
+                  <SeletorUsuarios opcoes={opcoes} valor={usuariosDe(c)} donoDe={donoDe(c.id)} onChange={(v) => salvarUsuarios(c, v)} />
                 </td>
               )}
               <td className="td"><input type="checkbox" className="h-4 w-4 accent-brand-600" checked={c.no_painel} onChange={(e) => salvar(c.id, { no_painel: e.target.checked })} /></td>
@@ -176,9 +194,9 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
               </select>
             </td>
             {!rede && (
-              <td className="td"><input className="input min-w-64" placeholder="usuários, separados por vírgula" value={novo.usuarios} onChange={(e) => setNovo({ ...novo, usuarios: e.target.value })} /></td>
+              <td className="td"><SeletorUsuarios opcoes={opcoes} valor={novo.usuarios} donoDe={donoDe(null)} onChange={(v) => setNovo({ ...novo, usuarios: v })} /></td>
             )}
-            <td className="td" colSpan={6}><button className="btn-primary" onClick={() => adicionar(novo.nome, novo.funcao, novo.usuarios)}><Plus size={16} /> Adicionar</button></td>
+            <td className="td" colSpan={6}><button className="btn-primary" onClick={() => adicionar(novo.nome, novo.funcao, novo.usuarios.join(','))}><Plus size={16} /> Adicionar</button></td>
           </tr>
         </tbody>
       </table>
@@ -197,7 +215,7 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
               <tbody className="divide-y divide-slate-100">
                 {comPeriodo.map((u) => (
                   <tr key={u.id}>
-                    <td className="td">{u.usuario}</td>
+                    <td className="td">{opcoes.find((o) => o.chave === u.usuario)?.usuario ?? u.usuario}</td>
                     <td className="td">{colaboradores.find((c) => c.id === u.colaborador_id)?.nome ?? '—'}</td>
                     <td className="td">{u.vigente_de ? fmtData(u.vigente_de) : 'sem início'}</td>
                     <td className="td">{u.vigente_ate ? fmtData(u.vigente_ate) : 'em diante'}</td>
@@ -209,10 +227,10 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
           )}
           <div className="flex flex-wrap items-end gap-2">
             <label className="block"><span className="label">Usuário no sistema</span>
-              <input className="input w-56" list="usuarios-conhecidos" placeholder="ex.: karina andrade" value={novoPeriodo.usuario} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, usuario: e.target.value })} />
-              <datalist id="usuarios-conhecidos">
-                {[...new Set(usuarios.filter((u) => u.unidade_id === unidadeId).map((u) => u.usuario))].map((u) => <option key={u} value={u} />)}
-              </datalist>
+              <select className="input w-64" value={novoPeriodo.usuario} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, usuario: e.target.value })}>
+                <option value="">Escolha…</option>
+                {opcoes.map((o) => <option key={o.chave} value={o.chave}>{o.usuario} ({o.qtd.toLocaleString('pt-BR')})</option>)}
+              </select>
             </label>
             <label className="block"><span className="label">Conta para</span>
               <select className="input w-48" value={novoPeriodo.colaborador_id} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, colaborador_id: e.target.value })}>
