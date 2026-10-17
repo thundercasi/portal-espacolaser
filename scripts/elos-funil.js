@@ -18,6 +18,8 @@ window.CF = {
   data(d) { return `${CF.dd(d.getDate())}/${CF.dd(d.getMonth() + 1)}/${d.getFullYear()}` },
   dataHora(v) {
     if (v == null || v === '') return ''
+    // texto já no formato brasileiro (ex.: FormattedDate das vendas): mantém — new Date() leria como mês/dia
+    if (typeof v === 'string' && /^\d{2}\/\d{2}\/\d{4}/.test(v)) return v.trim()
     const d = v instanceof Date ? v : new Date(v)
     if (isNaN(d)) return String(v)
     return `${CF.data(d)} ${CF.dd(d.getHours())}:${CF.dd(d.getMinutes())}`
