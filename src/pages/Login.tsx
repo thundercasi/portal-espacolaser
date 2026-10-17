@@ -5,18 +5,13 @@ import { supabase, supabaseConfigurado } from '../lib/supabase'
 export default function Login() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
-  const [modo, setModo] = useState<'entrar' | 'criar'>('entrar')
-  const [msg, setMsg] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
-    e.preventDefault(); setBusy(true); setErro(null); setMsg(null)
-    const r = modo === 'entrar'
-      ? await supabase.auth.signInWithPassword({ email, password: senha })
-      : await supabase.auth.signUp({ email, password: senha })
-    if (r.error) setErro(r.error.message)
-    else if (modo === 'criar' && !r.data.session) setMsg('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.')
+    e.preventDefault(); setBusy(true); setErro(null)
+    const r = await supabase.auth.signInWithPassword({ email, password: senha })
+    if (r.error) setErro(/invalid login credentials/i.test(r.error.message) ? 'E-mail ou senha incorretos.' : r.error.message)
     setBusy(false)
   }
 
@@ -37,11 +32,8 @@ export default function Login() {
         <label className="label">Senha</label>
         <input className="input mb-4" type="password" required minLength={6} value={senha} onChange={(e) => setSenha(e.target.value)} />
         {erro && <p className="mb-3 text-sm text-red-600">{erro}</p>}
-        {msg && <p className="mb-3 text-sm text-emerald-700">{msg}</p>}
-        <button className="btn-primary w-full" disabled={busy}>{modo === 'entrar' ? 'Entrar' : 'Criar conta'}</button>
-        <button type="button" className="mt-3 w-full text-center text-xs text-slate-500 hover:underline" onClick={() => setModo(modo === 'entrar' ? 'criar' : 'entrar')}>
-          {modo === 'entrar' ? 'Primeiro acesso? Criar conta' : 'Já tenho conta'}
-        </button>
+        <button className="btn-primary w-full" disabled={busy}>Entrar</button>
+        <p className="mt-3 text-center text-xs text-slate-500">Sem acesso? Fale com o administrador do sistema.</p>
       </form>
     </div>
   )

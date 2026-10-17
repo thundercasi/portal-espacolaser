@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
+import { criarContaDeLogin, supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import type { Unidade } from '../lib/types'
 import Equipe from '../components/Equipe'
@@ -104,15 +104,30 @@ function Usuarios({ setErro }: SetErro) {
   const [email, setEmail] = useState('')
   const [perfil, setPerfil] = useState<Perfil>('consulta')
   const [unidadesNovo, setUnidadesNovo] = useState<string[] | null>(null)
+  const [senha, setSenha] = useState('')
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
   const carregar = () => supabase.from('membros').select('email, perfil, unidades').order('email').then(({ data }) => setLista((data ?? []) as Membro[]))
   useEffect(() => { carregar() }, [])
 
+  // cria a conta de login (sem e-mail de confirmação) e libera o acesso
   async function adicionar() {
     const e = email.trim().toLowerCase()
-    if (!e.includes('@')) return
+    setAviso(null)
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) { setErro('Informe um e-mail no formato nome@dominio.com (não precisa existir).'); return }
+    if (senha.length < 6) { setErro('A senha inicial precisa ter pelo menos 6 caracteres.'); return }
+    setSalvando(true)
+    const conta = await criarContaDeLogin(e, senha)
+    if (conta.erro) { setErro(`Não foi possível criar o login: ${conta.erro}`); setSalvando(false); return }
     const { error } = await supabase.from('membros').insert({ email: e, perfil, unidades: perfil === 'consulta' ? unidadesNovo : null })
     setErro(error?.message ?? null)
-    if (!error) { setEmail(''); setUnidadesNovo(null) }
+    if (!error) {
+      setAviso(conta.criada
+        ? `Usuário ${e} criado. Ele já pode entrar com a senha informada e trocá-la em "Alterar senha".`
+        : `${e} já tinha login; o acesso foi liberado e a senha dele não foi alterada.`)
+      setEmail(''); setSenha(''); setUnidadesNovo(null)
+    }
+    setSalvando(false)
     carregar()
   }
   async function mudarPerfil(e: string, p: Perfil) {
@@ -135,7 +150,8 @@ function Usuarios({ setErro }: SetErro) {
       <div className="border-b border-slate-100 px-4 py-3">
         <div className="text-sm font-semibold">Usuários com acesso</div>
         <p className="text-xs text-slate-500">
-          A pessoa cria a conta na tela de login com um destes e-mails. <b>Administrador</b> acessa e altera tudo;
+          Informe e-mail e senha inicial: o login é criado na hora, sem envio de e-mail (o e-mail não precisa existir).
+          A pessoa troca a senha em "Alterar senha", no menu. <b>Administrador</b> acessa e altera tudo;
           <b> Consulta</b> só vê o Painel do funil, das unidades marcadas (nenhuma marcada = todas).
         </p>
       </div>
@@ -160,11 +176,13 @@ function Usuarios({ setErro }: SetErro) {
         ))}
       </ul>
       <div className="flex flex-wrap gap-2 border-t border-slate-100 p-4">
-        <input className="input max-w-sm" type="email" placeholder="email@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && adicionar()} />
+        <input className="input max-w-xs" type="email" placeholder="email@exemplo.com" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="input w-44" type="password" placeholder="Senha inicial" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && adicionar()} />
         <select className="input w-56" value={perfil} onChange={(e) => setPerfil(e.target.value as Perfil)}>
           {PERFIS.map((p) => <option key={p.valor} value={p.valor}>{p.nome} — {p.descricao}</option>)}
         </select>
-        <button className="btn-primary" onClick={adicionar}><Plus size={16} /> Adicionar</button>
+        <button className="btn-primary" onClick={adicionar} disabled={salvando}><Plus size={16} /> {salvando ? 'Criando…' : 'Adicionar'}</button>
+        {aviso && <div className="w-full text-sm text-emerald-700">{aviso}</div>}
         {perfil === 'consulta' && <div className="w-full"><EscolhaUnidades valor={unidadesNovo} onChange={setUnidadesNovo} /></div>}
       </div>
     </section>

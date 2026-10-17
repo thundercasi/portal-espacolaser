@@ -20,7 +20,7 @@ Painel do funil comercial das unidades (Paulista, Medon, Tivoli), substituindo a
 2. No **SQL Editor**, rode os arquivos de `supabase/migrations/` em ordem (o primeiro já cria as 3 unidades, a equipe inicial e as metas de junho/2026 da planilha; o segundo cria equipe/de-para e premiações).
 3. Copie `.env.example` para `.env` e preencha com a URL e a chave *publishable* (Project Settings → API).
 4. `npm install` e `npm run dev` → http://localhost:5173
-5. Clique em **Criar conta** com um e-mail cadastrado em `membros` (a migration já inclui o do administrador). Outros usuários são liberados em Cadastros → Usuários.
+5. No Supabase, desligue **Authentication → Sign In / Providers → Confirm email** (o sistema não envia e-mails). Crie o primeiro login em Authentication → Users → Add user com o e-mail que está em `membros`; os demais usuários são criados pelo administrador em Cadastros → Usuários (e-mail + senha inicial). Cada pessoa troca a própria senha em "Alterar senha".
 6. Em **Importar**, envie a planilha antiga ou as exportações do mês.
 
 Publicar: Vercel, build `npm run build`, pasta `dist`, variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.

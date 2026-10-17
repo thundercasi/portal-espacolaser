@@ -1,8 +1,9 @@
 import { Suspense, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator, Trophy } from 'lucide-react'
+import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator, Trophy, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
+import AlterarSenha from './AlterarSenha'
 
 const NAV = [
   {
@@ -30,6 +31,7 @@ const NAV = [
 
 export default function Layout() {
   const [aberto, setAberto] = useState(false)
+  const [trocarSenha, setTrocarSenha] = useState(false)
   const { session, admin } = useApp()
   const nav = NAV.map((g) => ({ ...g, itens: g.itens.filter((i) => admin || ('consulta' in i && i.consulta)) })).filter((g) => g.itens.length)
   return (
@@ -59,11 +61,15 @@ export default function Layout() {
         </nav>
         <div className="absolute inset-x-0 bottom-0 border-t border-slate-800 p-3">
           <div className="truncate px-2 pb-2 text-xs text-slate-400">{session?.user.email}</div>
+          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800" onClick={() => setTrocarSenha(true)}>
+            <KeyRound size={16} /> Alterar senha
+          </button>
           <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800" onClick={() => supabase.auth.signOut()}>
             <LogOut size={16} /> Sair
           </button>
         </div>
       </aside>
+      <AlterarSenha open={trocarSenha} onClose={() => setTrocarSenha(false)} />
       {aberto && <div className="fixed inset-0 z-30 bg-black/30 lg:hidden" onClick={() => setAberto(false)} />}
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
