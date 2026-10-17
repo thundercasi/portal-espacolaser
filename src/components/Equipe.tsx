@@ -4,10 +4,12 @@ import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import { normalizar } from '../lib/importar'
 import { addMeses, hojeISO, inicioMes, mesAtual } from '../lib/format'
-import { FUNCOES, type Colaborador, type Funcao } from '../lib/types'
+import { FUNCOES, type Colaborador, type ColaboradorUsuario, type Funcao } from '../lib/types'
+import { fmtData } from '../lib/format'
 
 const REDE = 'rede'
 const separar = (texto: string) => [...new Set(texto.split(/[,;\n]/).map(normalizar).filter(Boolean))]
+const permanente = (u: ColaboradorUsuario) => !u.vigente_de && !u.vigente_ate
 
 /** Cadastro da equipe com o de/para de usuários do sistema (usado pelo painel e pelas premiações). */
 export default function Equipe({ setErro }: { setErro: (s: string | null) => void }) {
@@ -19,7 +21,11 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
   const rede = unidadeId === REDE
   const unidade = unidades.find((u) => u.id === unidadeId)
   const lista = colaboradores.filter((c) => (rede ? !c.unidade_id : c.unidade_id === unidadeId))
-  const usuariosDe = (c: Colaborador) => usuarios.filter((u) => u.colaborador_id === c.id).map((u) => u.usuario).sort()
+  // o campo "Usuários no sistema" mostra só os vínculos permanentes; os com período ficam na seção própria
+  const usuariosDe = (c: Colaborador) => usuarios.filter((u) => u.colaborador_id === c.id && permanente(u)).map((u) => u.usuario).sort()
+  const comPeriodo = usuarios.filter((u) => u.unidade_id === unidadeId && !permanente(u))
+    .sort((a, b) => a.usuario.localeCompare(b.usuario) || (a.vigente_de ?? '').localeCompare(b.vigente_de ?? ''))
+  const [novoPeriodo, setNovoPeriodo] = useState({ usuario: '', colaborador_id: '', de: '', ate: '' })
 
   // usuários que aparecem nos dados desta unidade nos últimos 2 meses e ainda não têm dono
   useEffect(() => {
@@ -50,17 +56,40 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
     if (!c.unidade_id) return
     const novos = separar(texto).sort()
     if (novos.join('|') === usuariosDe(c).join('|')) return
-    const del = await supabase.from('colaborador_usuarios').delete().eq('colaborador_id', c.id)
-    if (del.error) { setErro(del.error.message); return }
-    if (novos.length) {
-      const { error } = await supabase.from('colaborador_usuarios').upsert(novos.map((usuario) => ({ unidade_id: c.unidade_id, usuario, colaborador_id: c.id })))
-      setErro(error?.message ?? null)
-    }
+    const erro = await gravarPermanentes(c.unidade_id, c.id, novos, true)
+    setErro(erro)
     reloadCadastros()
+  }
+  /** vínculos permanentes (sem datas): cada usuário tem no máximo um por unidade */
+  async function gravarPermanentes(uid: string, colaboradorId: string, lista: string[], substituirDaPessoa: boolean) {
+    const q = supabase.from('colaborador_usuarios').delete().eq('unidade_id', uid).is('vigente_de', null).is('vigente_ate', null)
+    if (substituirDaPessoa) {
+      const r = await q.eq('colaborador_id', colaboradorId)
+      if (r.error) return r.error.message
+    }
+    if (!lista.length) return null
+    const r2 = await supabase.from('colaborador_usuarios').delete().eq('unidade_id', uid).is('vigente_de', null).is('vigente_ate', null).in('usuario', lista)
+    if (r2.error) return r2.error.message
+    const r3 = await supabase.from('colaborador_usuarios').insert(lista.map((usuario) => ({ unidade_id: uid, usuario, colaborador_id: colaboradorId })))
+    return r3.error?.message ?? null
   }
   async function vincular(usuario: string, colaboradorId: string) {
     if (!unidade || !colaboradorId) return
-    const { error } = await supabase.from('colaborador_usuarios').upsert({ unidade_id: unidade.id, usuario: normalizar(usuario), colaborador_id: colaboradorId })
+    setErro(await gravarPermanentes(unidade.id, colaboradorId, [normalizar(usuario)], false)); reloadCadastros()
+  }
+  async function adicionarPeriodo() {
+    const { usuario, colaborador_id, de, ate } = novoPeriodo
+    if (!unidade || !normalizar(usuario) || !colaborador_id || (!de && !ate)) { setErro('Informe usuário, pessoa e pelo menos uma das datas.'); return }
+    if (de && ate && ate < de) { setErro('A data final é anterior à inicial.'); return }
+    const { error } = await supabase.from('colaborador_usuarios').insert({
+      unidade_id: unidade.id, usuario: normalizar(usuario), colaborador_id, vigente_de: de || null, vigente_ate: ate || null,
+    })
+    setErro(error?.message ?? null)
+    if (!error) setNovoPeriodo({ usuario: '', colaborador_id: '', de: '', ate: '' })
+    reloadCadastros()
+  }
+  async function removerPeriodo(id: string) {
+    const { error } = await supabase.from('colaborador_usuarios').delete().eq('id', id)
     setErro(error?.message ?? null); reloadCadastros()
   }
   async function adicionar(nome: string, funcao: Funcao, usuariosTexto: string) {
@@ -71,8 +100,8 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
     if (error) { setErro(error.message); return }
     const us = separar(usuariosTexto)
     if (!rede && us.length) {
-      const r = await supabase.from('colaborador_usuarios').upsert(us.map((usuario) => ({ unidade_id: unidadeId, usuario, colaborador_id: data.id })))
-      if (r.error) { setErro(r.error.message); return }
+      const e = await gravarPermanentes(unidadeId, data.id, us, false)
+      if (e) { setErro(e); return }
     }
     setErro(null); setNovo({ nome: '', funcao: 'Consultora', usuarios: '' })
     reloadCadastros()
@@ -153,6 +182,50 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
           </tr>
         </tbody>
       </table>
+
+      {!rede && (
+        <div className="border-t border-slate-100 p-4">
+          <div className="text-sm font-semibold">Usuários compartilhados (vínculo por período)</div>
+          <p className="mb-2 text-xs text-slate-500">
+            Quando uma pessoa usa o usuário de outra por alguns dias. Dentro do período, leads, agendamentos e vendas desse usuário
+            contam para a pessoa indicada; fora dele, vale o vínculo permanente (campo "Usuários no sistema").
+            Deixe "até" vazio para "daqui em diante".
+          </p>
+          {comPeriodo.length > 0 && (
+            <table className="mb-3 w-full">
+              <thead className="bg-slate-50"><tr><th className="th">Usuário</th><th className="th">Conta para</th><th className="th">De</th><th className="th">Até</th><th className="th" /></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {comPeriodo.map((u) => (
+                  <tr key={u.id}>
+                    <td className="td">{u.usuario}</td>
+                    <td className="td">{colaboradores.find((c) => c.id === u.colaborador_id)?.nome ?? '—'}</td>
+                    <td className="td">{u.vigente_de ? fmtData(u.vigente_de) : 'sem início'}</td>
+                    <td className="td">{u.vigente_ate ? fmtData(u.vigente_ate) : 'em diante'}</td>
+                    <td className="td text-right"><button className="btn-danger p-1.5" onClick={() => removerPeriodo(u.id)} aria-label="Remover vínculo"><Trash2 size={16} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block"><span className="label">Usuário no sistema</span>
+              <input className="input w-56" list="usuarios-conhecidos" placeholder="ex.: karina andrade" value={novoPeriodo.usuario} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, usuario: e.target.value })} />
+              <datalist id="usuarios-conhecidos">
+                {[...new Set(usuarios.filter((u) => u.unidade_id === unidadeId).map((u) => u.usuario))].map((u) => <option key={u} value={u} />)}
+              </datalist>
+            </label>
+            <label className="block"><span className="label">Conta para</span>
+              <select className="input w-48" value={novoPeriodo.colaborador_id} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, colaborador_id: e.target.value })}>
+                <option value="">Escolha…</option>
+                {lista.filter((c) => c.ativo).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+            <label className="block"><span className="label">De</span><input type="date" className="input w-40" value={novoPeriodo.de} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, de: e.target.value })} /></label>
+            <label className="block"><span className="label">Até</span><input type="date" className="input w-40" value={novoPeriodo.ate} onChange={(e) => setNovoPeriodo({ ...novoPeriodo, ate: e.target.value })} /></label>
+            <button className="btn-primary" onClick={adicionarPeriodo}><Plus size={16} /> Adicionar vínculo</button>
+          </div>
+        </div>
+      )}
 
       {!rede && semVinculo.length > 0 && (
         <div className="border-t border-slate-100 p-4">

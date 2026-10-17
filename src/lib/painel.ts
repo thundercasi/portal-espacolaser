@@ -1,5 +1,6 @@
 // Cálculos do painel — espelham as abas Paulista / Medon / Tivoli da planilha.
 import { normalizar } from './importar'
+import { criarResolvedor } from './depara'
 import type { Colaborador, ColaboradorUsuario, LinhaPainel, Meta, Unidade } from './types'
 
 /** origens de mídia que contam como "venda de avaliação" (coluna "Venda Av?" da planilha) */
@@ -131,15 +132,13 @@ export function calcularPainel(args: {
   }
   const unidadePorEstab = new Map(unidades.map((u) => [normalizar(u.estabelecimento), u.id]))
   const estabs = new Set(unidadePorEstab.keys())
-  // de/para: usuário da exportação → coluna da pessoa, dentro da unidade do registro
-  const colabPorId = new Map(daSelecao.map((c) => [c.id, c]))
-  const coluna = (estab: string, usuario: string): string | null => {
+  // de/para: usuário da exportação → coluna da pessoa, na unidade e no dia do registro
+  const quemEra = criarResolvedor(colaboradores, usuarios)
+  const coluna = (estab: string, usuario: string, dia: number): string | null => {
     const uid = unidadePorEstab.get(normalizar(estab))
     if (!uid) return null
-    const u = normalizar(usuario)
-    const vinc = usuarios.find((x) => x.unidade_id === uid && x.usuario === u)
-    const colab = vinc ? colabPorId.get(vinc.colaborador_id) : daSelecao.find((c) => c.unidade_id === uid && normalizar(c.nome) === u)
-    if (!colab || !colab.no_painel) return null
+    const colab = quemEra(uid, usuario, `${mes}-${String(dia).padStart(2, '0')}`)
+    if (!colab || !colab.no_painel || !ids.has(colab.unidade_id ?? '')) return null
     return normalizar(colab.nome)
   }
   const doMes = (l: LinhaPainel) => l.dia >= 1 && l.dia <= n
@@ -157,7 +156,7 @@ export function calcularPainel(args: {
       case 'leads':
       case 'agend_criados': {
         if (!daUnidade) break
-        const col = coluna(l.estabelecimento, l.pessoa)
+        const col = coluna(l.estabelecimento, l.pessoa, l.dia)
         const alvo = l.metrica === 'leads' ? (col ? leads[col] : outrosLeads) : (col ? agend[col] : outrosAgend)
         alvo[l.dia] += qtd
         break

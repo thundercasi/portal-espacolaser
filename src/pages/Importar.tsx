@@ -3,7 +3,7 @@ import { FileSpreadsheet, Upload } from 'lucide-react'
 import readXlsxFile from 'read-excel-file/browser'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote } from '../lib/importar'
+import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote, type VendaVendedorRow } from '../lib/importar'
 import { addMeses, fimMes, fmtData, inicioMes, mesAtual } from '../lib/format'
 import type { Importacao } from '../lib/types'
 import { Badge, Empty, ErrorBox, MonthPicker, PageHeader } from '../components/ui'
@@ -12,7 +12,7 @@ const TIPO_LABEL = {
   leads: 'Leads', agendamentos: 'Agendamentos', vendas: 'Vendas', vendas_vendedor: 'Vendas por vendedor', cancelamentos: 'Cancelamentos',
 } as const
 const CHAVE = {
-  leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento', vendas_vendedor: 'mes,estabelecimento,vendedor', cancelamentos: 'orcamento,item',
+  leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento', vendas_vendedor: 'dia,estabelecimento,vendedor', cancelamentos: 'orcamento,item',
 } as const
 const LOTE_DB = 500
 
@@ -76,19 +76,57 @@ export default function Importar() {
     setLendo(false)
   }
 
+  /**
+   * Vendas por vendedor substituem o que já existe no mesmo período e unidade:
+   * - arquivo com Data de Pagamento: os dias do arquivo + o total "sem data" desses meses;
+   * - arquivo sem data: o mês inteiro escolhido.
+   * Assim reimportar ou trocar de formato não duplica valores.
+   */
+  async function gravarVendasVendedor(linhas: VendaVendedorRow[], periodo: [string, string] | null) {
+    const mesSemData = inicioMes(mesVendedor)
+    const rows = linhas.map((r) => {
+      const dia = r.dia ?? mesSemData
+      return { ...r, dia, mes: `${dia.slice(0, 7)}-01`, sem_data: !r.dia }
+    })
+    setProgresso('Vendas por vendedor: substituindo o período…')
+    for (const estab of [...new Set(rows.map((r) => r.estabelecimento))]) {
+      if (periodo) {
+        const del = await supabase.from('vendas_vendedor').delete().eq('estabelecimento', estab).gte('dia', periodo[0]).lte('dia', periodo[1])
+        if (del.error) throw del.error
+        for (const mes of [...new Set(rows.map((r) => r.mes))]) {
+          const d2 = await supabase.from('vendas_vendedor').delete().eq('estabelecimento', estab).eq('mes', mes).eq('sem_data', true)
+          if (d2.error) throw d2.error
+        }
+      } else {
+        const del = await supabase.from('vendas_vendedor').delete().eq('estabelecimento', estab).eq('mes', mesSemData)
+        if (del.error) throw del.error
+      }
+    }
+    for (let i = 0; i < rows.length; i += LOTE_DB) {
+      setProgresso(`Vendas por vendedor: ${Math.min(i + LOTE_DB, rows.length)} de ${rows.length}`)
+      const { error } = await supabase.from('vendas_vendedor').insert(rows.slice(i, i + LOTE_DB))
+      if (error) throw error
+    }
+  }
+
   async function importar() {
     setErro(null); setOk(null)
     try {
       for (const l of lotes) {
-        for (let i = 0; i < l.linhas.length; i += LOTE_DB) {
-          setProgresso(`${TIPO_LABEL[l.tipo]}: ${Math.min(i + LOTE_DB, l.linhas.length)} de ${l.linhas.length}`)
-          const linhas = l.tipo === 'vendas_vendedor' ? l.linhas.map((r) => ({ ...r, mes: inicioMes(mesVendedor) })) : l.linhas
-          const { error } = await supabase.from(l.tipo).upsert(linhas.slice(i, i + LOTE_DB) as never[], { onConflict: CHAVE[l.tipo] })
-          if (error) throw error
+        if (l.tipo === 'vendas_vendedor') {
+          await gravarVendasVendedor(l.linhas, l.periodo)
+        } else {
+          for (let i = 0; i < l.linhas.length; i += LOTE_DB) {
+            setProgresso(`${TIPO_LABEL[l.tipo]}: ${Math.min(i + LOTE_DB, l.linhas.length)} de ${l.linhas.length}`)
+            const { error } = await supabase.from(l.tipo).upsert(l.linhas.slice(i, i + LOTE_DB) as never[], { onConflict: CHAVE[l.tipo] })
+            if (error) throw error
+          }
         }
+        const semData = l.tipo === 'vendas_vendedor' && !l.periodo
         await supabase.from('importacoes').insert({
-          arquivo: l.origem, tipo: l.tipo, linhas: l.linhas.length, periodo_ini: l.tipo === 'vendas_vendedor' ? inicioMes(mesVendedor) : l.periodo?.[0] ?? null,
-          periodo_fim: l.tipo === 'vendas_vendedor' ? fimMes(mesVendedor) : l.periodo?.[1] ?? null,
+          arquivo: l.origem, tipo: l.tipo, linhas: l.linhas.length,
+          periodo_ini: semData ? inicioMes(mesVendedor) : l.periodo?.[0] ?? null,
+          periodo_fim: semData ? fimMes(mesVendedor) : l.periodo?.[1] ?? null,
         })
       }
       setOk(`Importação concluída: ${lotes.map((l) => `${l.linhas.length} ${TIPO_LABEL[l.tipo].toLowerCase()}`).join(', ')}.`)
@@ -133,7 +171,7 @@ export default function Importar() {
                 <Badge className="bg-brand-100 text-brand-700">{TIPO_LABEL[l.tipo]}</Badge>
                 <span className="tabular-nums">{l.linhas.length.toLocaleString('pt-BR')} registros</span>
                 {l.periodo && <span className="text-slate-500">{fmtData(l.periodo[0])} a {fmtData(l.periodo[1])}</span>}
-                {l.tipo === 'vendas_vendedor' && (
+                {l.tipo === 'vendas_vendedor' && !l.periodo && (
                   <span className="flex items-center gap-2 text-slate-600">Mês das vendas: <MonthPicker value={mesVendedor} onChange={setMesVendedor} /></span>
                 )}
                 {l.ignoradas > 0 && <span className="text-amber-700">{l.ignoradas} linhas sem data/ID ignoradas</span>}

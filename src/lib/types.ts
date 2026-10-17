@@ -24,9 +24,12 @@ export interface Colaborador {
 
 /** de/para: usuário que aparece nas exportações (normalizado) → pessoa, por unidade */
 export interface ColaboradorUsuario {
+  id: string
   unidade_id: string
   usuario: string
   colaborador_id: string
+  vigente_de: string | null  // YYYY-MM-DD; null = sem início
+  vigente_ate: string | null // YYYY-MM-DD; null = sem fim (ambos null = vínculo permanente)
 }
 
 export interface Meta {

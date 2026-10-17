@@ -19,9 +19,9 @@ export interface VendaRow {
   id_orcamento: number; data_pagamento: string; estabelecimento: string; origem_midia: string | null
   tipo: string | null; contrato_assinado: string | null; valor_bruto: number; valor_desconto: number; valor_liquido: number
 }
-/** relatório de vendas por vendedor: sem data — o mês é escolhido na importação */
+/** relatório de vendas por vendedor: dia = Data de Pagamento; sem essa coluna, o mês é escolhido na importação */
 export interface VendaVendedorRow {
-  estabelecimento: string; vendedor: string; perfil: string | null; cargo: string | null
+  estabelecimento: string; vendedor: string; dia: string | null; perfil: string | null; cargo: string | null
   valor_bruto: number; valor_desconto: number; valor_liquido: number
 }
 export interface CancelamentoRow {
@@ -34,7 +34,7 @@ export type Lote =
   | { tipo: 'leads'; origem: string; linhas: LeadRow[]; ignoradas: number; periodo: [string, string] | null }
   | { tipo: 'agendamentos'; origem: string; linhas: AgendamentoRow[]; ignoradas: number; periodo: [string, string] | null }
   | { tipo: 'vendas'; origem: string; linhas: VendaRow[]; ignoradas: number; periodo: [string, string] | null }
-  | { tipo: 'vendas_vendedor'; origem: string; linhas: VendaVendedorRow[]; ignoradas: number; periodo: null }
+  | { tipo: 'vendas_vendedor'; origem: string; linhas: VendaVendedorRow[]; ignoradas: number; periodo: [string, string] | null }
   | { tipo: 'cancelamentos'; origem: string; linhas: CancelamentoRow[]; ignoradas: number; periodo: [string, string] | null }
 
 // cabeçalhos obrigatórios (normalizados) que identificam cada tipo
@@ -52,7 +52,7 @@ const COLUNAS: Record<Tipo, Record<string, string>> = {
     assinado: 'contrato assinado', bruto: 'v bruto', desconto: 'v desconto', liquido: 'v liquido',
   },
   vendas_vendedor: {
-    estab: 'estabelecimento', vendedor: 'vendedor', perfil: 'perfil', cargo: 'cargo',
+    estab: 'estabelecimento', vendedor: 'vendedor', perfil: 'perfil', cargo: 'cargo', data: 'data de pagamento',
     bruto: 'v bruto', desconto: 'v desconto', liquido: 'v liquido',
   },
   cancelamentos: {
@@ -219,22 +219,25 @@ export async function lerLinhas(linhas: Linhas, origem: string): Promise<Lote | 
   }
 
   if (tipo === 'vendas_vendedor') {
-    // um vendedor pode vir em mais de uma linha na mesma unidade: soma
+    // um vendedor pode vir em mais de uma linha na mesma unidade (e no mesmo dia): soma
+    const temData = 'data' in idx
     const mapa = new Map<string, VendaVendedorRow>()
     for (const row of corpo) {
       const estab = txt(c(row, 'estab')), vendedor = txt(c(row, 'vendedor'))
-      if (!estab || !vendedor) { if (row.some((v) => v != null && v !== '')) ignoradas++; continue }
-      const k = `${estab}|${vendedor}`
+      const dia = temData ? paraData(c(row, 'data')) : null
+      if (!estab || !vendedor || (temData && !dia)) { if (row.some((v) => v != null && v !== '')) ignoradas++; continue }
+      const k = `${estab}|${vendedor}|${dia ?? ''}`
       const atual = mapa.get(k)
       const bruto = parseNum(c(row, 'bruto') as string | number), desconto = parseNum(c(row, 'desconto') as string | number)
       const liquido = parseNum(c(row, 'liquido') as string | number)
       if (atual) { atual.valor_bruto += bruto; atual.valor_desconto += desconto; atual.valor_liquido += liquido }
       else mapa.set(k, {
-        estabelecimento: estab, vendedor, perfil: txt(c(row, 'perfil')), cargo: txt(c(row, 'cargo')),
+        estabelecimento: estab, vendedor, dia, perfil: txt(c(row, 'perfil')), cargo: txt(c(row, 'cargo')),
         valor_bruto: bruto, valor_desconto: desconto, valor_liquido: liquido,
       })
     }
-    return { tipo, origem, linhas: [...mapa.values()], ignoradas, periodo: null }
+    const out = [...mapa.values()]
+    return { tipo, origem, linhas: out, ignoradas, periodo: temData ? periodoDe(out.map((x) => x.dia as string)) : null }
   }
 
   if (tipo === 'cancelamentos') {

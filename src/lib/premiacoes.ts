@@ -1,5 +1,6 @@
 // Cálculo das premiações — espelha a planilha "Cálculo Premiações - Padrão.xlsx".
 import { normalizar } from './importar'
+import { criarResolvedor } from './depara'
 import type { Colaborador, ColaboradorUsuario, Unidade } from './types'
 
 export type Status = 'Nenhum' | 'Meta' | 'Super'
@@ -19,10 +20,11 @@ export interface Regras {
 export interface Ajuste { bateu_meta: boolean; func_mes: number; sem_garantido: boolean; observacao: string | null }
 export const ajustePadrao: Ajuste = { bateu_meta: false, func_mes: 0, sem_garantido: false, observacao: null }
 
-export interface VendaVendedor { estabelecimento: string; vendedor: string; valor_liquido: number }
+/** dia = Data de Pagamento; relatório sem data: 1º dia do mês e sem_data = true */
+export interface VendaVendedor { estabelecimento: string; vendedor: string; valor_liquido: number; dia: string; sem_data: boolean }
 export interface Cancelamento { estabelecimento: string; data_cancelamento: string; data_venda: string | null; valor_cancelado: number }
 /** contagem por estabelecimento + usuário (leads = captações; agendamentos = criados no mês) */
-export interface Contagem { estabelecimento: string; usuario: string; leads: number; agendamentos: number }
+export interface Contagem { estabelecimento: string; usuario: string; data: string; leads: number; agendamentos: number }
 
 export interface LinhaPremio {
   colaborador: Colaborador
@@ -86,12 +88,16 @@ export function calcularPremiacoes(args: {
   const { unidades, colaboradores, usuarios, regras, status, ajustes, vendas, cancelamentos, contagens } = args
   const ativos = colaboradores.filter((c) => c.ativo)
 
-  // descobre a pessoa de um usuário dentro da unidade: de/para ou, sem de/para, nome igual
-  const pessoa = (unidadeId: string, usuario: string) => {
-    const u = normalizar(usuario)
-    const v = usuarios.find((x) => x.unidade_id === unidadeId && x.usuario === u)
-    if (v) return ativos.find((c) => c.id === v.colaborador_id) ?? null
-    return ativos.find((c) => c.unidade_id === unidadeId && normalizar(c.nome) === u) ?? null
+  // de/para pela unidade e pela data do registro (ver src/lib/depara.ts)
+  const quemEra = criarResolvedor(colaboradores, usuarios)
+  const pessoa = (unidadeId: string, usuario: string, data: string) => {
+    const c = quemEra(unidadeId, usuario, data)
+    return c && c.unidade_id === unidadeId ? c : null
+  }
+  // relatório de vendas sem data: vale o vínculo do último dia do mês
+  const ultimoDiaDoMes = (dia: string) => {
+    const [a, m] = dia.split('-').map(Number)
+    return `${dia.slice(0, 8)}${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
   }
 
   const montarLinha = (c: Colaborador, st: Status, base: number, v: number, ag: number, cap: number): LinhaPremio => {
@@ -142,8 +148,8 @@ export function calcularPremiacoes(args: {
     // soma vendas, leads e agendamentos por pessoa; o que não tem dono vai para "sem vínculo"
     const porPessoa = new Map<string, { v: number; l: number; a: number }>()
     const sem = new Map<string, { usuario: string; vendas: number; leads: number; agendamentos: number }>()
-    const somar = (usuario: string, v: number, l: number, a: number) => {
-      const p = pessoa(u.id, usuario)
+    const somar = (usuario: string, data: string, v: number, l: number, a: number) => {
+      const p = pessoa(u.id, usuario, data)
       if (p) {
         const t = porPessoa.get(p.id) ?? { v: 0, l: 0, a: 0 }
         t.v += v; t.l += l; t.a += a
@@ -155,8 +161,8 @@ export function calcularPremiacoes(args: {
         sem.set(k, t)
       }
     }
-    for (const x of vendasU) somar(x.vendedor, Number(x.valor_liquido), 0, 0)
-    for (const x of contagens.filter((x) => normalizar(x.estabelecimento) === est)) somar(x.usuario, 0, Number(x.leads), Number(x.agendamentos))
+    for (const x of vendasU) somar(x.vendedor, x.sem_data ? ultimoDiaDoMes(x.dia) : x.dia, Number(x.valor_liquido), 0, 0)
+    for (const x of contagens.filter((x) => normalizar(x.estabelecimento) === est)) somar(x.usuario, x.data, 0, Number(x.leads), Number(x.agendamentos))
 
     const daUnidade = ativos.filter((c) => c.unidade_id === u.id).sort((a, b) => a.ordem - b.ordem)
     const linhas = daUnidade.map((c) => {

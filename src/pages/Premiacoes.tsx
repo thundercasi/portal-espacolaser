@@ -60,7 +60,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
   const carregar = useCallback(async () => {
     const ini = inicioMes(mes), fim = fimMes(mes)
     const [v, c, p, m, s, a] = await Promise.all([
-      supabase.from('vendas_vendedor').select('estabelecimento, vendedor, valor_liquido').eq('mes', ini),
+      supabase.from('vendas_vendedor').select('estabelecimento, vendedor, valor_liquido, dia, sem_data').eq('mes', ini),
       supabase.from('cancelamentos').select('estabelecimento, data_cancelamento, data_venda, valor_cancelado').gte('data_cancelamento', ini).lte('data_cancelamento', fim),
       supabase.rpc('painel_diario', { p_ini: ini, p_fim: fim, p_origens_av: ORIGENS_AVALIACAO }),
       supabase.from('metas').select('*').eq('mes', ini),
@@ -69,12 +69,13 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
     ])
     const err = [v, c, p, m, s, a].find((r) => r.error)?.error
     setErro(err ? err.message : null)
-    // leads e agendamentos criados no mês, por estabelecimento + usuário
+    // leads e agendamentos criados no mês, por estabelecimento + usuário + dia (o de/para depende da data)
     const cont = new Map<string, Contagem>()
     for (const l of (p.data ?? []) as LinhaPainel[]) {
       if (l.metrica !== 'leads' && l.metrica !== 'agend_criados') continue
-      const k = `${l.estabelecimento}|${l.pessoa}`
-      const t = cont.get(k) ?? { estabelecimento: l.estabelecimento, usuario: l.pessoa, leads: 0, agendamentos: 0 }
+      const data = `${mes}-${String(l.dia).padStart(2, '0')}`
+      const k = `${l.estabelecimento}|${l.pessoa}|${data}`
+      const t = cont.get(k) ?? { estabelecimento: l.estabelecimento, usuario: l.pessoa, data, leads: 0, agendamentos: 0 }
       if (l.metrica === 'leads') t.leads += Number(l.qtd); else t.agendamentos += Number(l.qtd)
       cont.set(k, t)
     }
