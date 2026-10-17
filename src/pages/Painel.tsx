@@ -429,7 +429,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
     const v = (i: Indicador, f: (x: number | null) => string = dx) => fmtRes(r.nome, i, f)
     return (
       <tr key={prefixo + r.nome} className={`${classe} ${idx === 0 ? 'border-t border-slate-200' : ''}`}>
-        <td className={`${td} text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500`}>{r.nome}</td>
+        <td className={`${td} !text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500`}>{r.nome}</td>
         {cols.map((c, k) => <td key={c.chave} className={`${td} ${k === 0 ? sep : ''}`}><Par l={v(conj.leads[c.chave])} a={v(conj.agend[c.chave])} corL={cor(r.nome, conj.leads[c.chave])} corA={cor(r.nome, conj.agend[c.chave])} /></td>)}
         <td className={`${td} ${sep}`}><Par l={v(conj.leadsTotal)} a={v(conj.agendTotal)} forte corL={cor(r.nome, conj.leadsTotal)} corA={cor(r.nome, conj.agendTotal)} /></td>
         <td className={`${td} ${sep} ${cor(r.nome, conj.avaliacoes)}`}>{v(conj.avaliacoes)}</td>
@@ -473,7 +473,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
             const dez = p.dezenas.find((x) => x.fim === d && x.numero < 3)
             return [
               <tr key={d} className={`transition-colors hover:bg-amber-50/60 ${d === p.diaHoje ? 'bg-amber-50 font-medium ring-1 ring-inset ring-amber-300' : !p.util[d] ? 'bg-slate-100/70 text-slate-400' : d % 2 ? 'bg-white' : 'bg-slate-50/60'}`}>
-                <td className={`${td} text-left font-semibold ${d === p.diaHoje ? 'text-amber-700' : ''}`}>{d}{d === p.diaHoje && <span className="ml-1 text-[9px] font-medium uppercase">hoje</span>}</td>
+                <td className={`${td} !text-left font-semibold ${d === p.diaHoje ? 'text-amber-700' : ''}`}>{d}{d === p.diaHoje && <span className="ml-1 text-[9px] font-medium uppercase">hoje</span>}</td>
                 {cols.map((c, k) => <td key={c.chave} className={`${td} ${k === 0 ? sep : ''}`}><Par l={p.leads[c.chave][d]} a={p.agend[c.chave][d]} /></td>)}
                 <td className={`${td} ${sep}`}><Par l={tl} a={ta} forte /></td>
                 <td className={`${td} ${sep}`}>{p.avaliacoes[d] || ''}</td>
@@ -486,7 +486,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
               </tr>,
               dez && (
                 <tr key={`dz${dez.numero}`} className="border-t-2 border-brand-300 bg-brand-100/80">
-                  <td className={`${td} text-left font-semibold text-brand-800`} colSpan={cols.length + 9}>
+                  <td className={`${td} !text-left font-semibold text-brand-800`} colSpan={cols.length + 9}>
                     Acumulado até o dia {dez.fim} ({dez.numero === 1 ? '1ª dezena' : '1ª + 2ª dezenas'})
                   </td>
                 </tr>
@@ -496,7 +496,7 @@ function TabelaDiaria({ p }: { p: TPainel }) {
           })}
         </tbody>
         <tfoot className="border-t-2 border-slate-300 bg-slate-100/80">
-          <tr><td className={`${td} text-left font-semibold text-slate-700`} colSpan={cols.length + 9}>Mês inteiro</td></tr>
+          <tr><td className={`${td} !text-left font-semibold text-slate-700`} colSpan={cols.length + 9}>Mês inteiro</td></tr>
           {linhasResumo(p.ind, rodapes, 'mes', true, '')}
         </tfoot>
       </table>
