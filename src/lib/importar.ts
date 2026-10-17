@@ -15,8 +15,9 @@ export interface AgendamentoRow {
   chave: string; estabelecimento: string; data_agendada: string; data_criacao: string
   usuario_criacao: string | null; origem_cliente: string | null; status: string | null
 }
+/** vendedor = '' quando o relatório não tem a coluna; um orçamento dividido entre vendedores vem em várias linhas */
 export interface VendaRow {
-  id_orcamento: number; data_pagamento: string; estabelecimento: string; origem_midia: string | null
+  id_orcamento: number; vendedor: string; data_pagamento: string; estabelecimento: string; origem_midia: string | null
   tipo: string | null; contrato_assinado: string | null; valor_bruto: number; valor_desconto: number; valor_liquido: number
 }
 /** relatório de vendas por vendedor: dia = Data de Pagamento; sem essa coluna, o mês é escolhido na importação */
@@ -49,7 +50,7 @@ const COLUNAS: Record<Tipo, Record<string, string>> = {
   },
   vendas: {
     id: 'id orc', data: 'data de pagamento', estab: 'estabelecimento', origem: 'origem midia', tipo: 'tipo',
-    assinado: 'contrato assinado', bruto: 'v bruto', desconto: 'v desconto', liquido: 'v liquido',
+    assinado: 'contrato assinado', bruto: 'v bruto', desconto: 'v desconto', liquido: 'v liquido', vendedor: 'vendedor',
   },
   vendas_vendedor: {
     estab: 'estabelecimento', vendedor: 'vendedor', perfil: 'perfil', cargo: 'cargo', data: 'data de pagamento',
@@ -257,12 +258,14 @@ export async function lerLinhas(linhas: Linhas, origem: string): Promise<Lote | 
     return { tipo, origem, linhas: out, ignoradas, periodo: periodoDe(out.map((x) => x.data_cancelamento)) }
   }
 
-  const mapa = new Map<number, VendaRow>()
+  // chave = ID Orç. + Vendedor: linha repetida igual é descartada; venda dividida entre vendedores soma as partes
+  const mapa = new Map<string, VendaRow>()
   for (const row of corpo) {
     const id = paraInt(c(row, 'id')), data = paraData(c(row, 'data')), estab = txt(c(row, 'estab'))
     if (!id || !data || !estab) { if (row.some((v) => v != null && v !== '')) ignoradas++; continue }
-    mapa.set(id, {
-      id_orcamento: id, data_pagamento: data, estabelecimento: estab, origem_midia: txt(c(row, 'origem')),
+    const vendedor = txt(c(row, 'vendedor')) ?? ''
+    mapa.set(`${id}|${vendedor}`, {
+      id_orcamento: id, vendedor, data_pagamento: data, estabelecimento: estab, origem_midia: txt(c(row, 'origem')),
       tipo: txt(c(row, 'tipo')), contrato_assinado: txt(c(row, 'assinado')),
       valor_bruto: parseNum(c(row, 'bruto') as string | number), valor_desconto: parseNum(c(row, 'desconto') as string | number),
       valor_liquido: parseNum(c(row, 'liquido') as string | number),

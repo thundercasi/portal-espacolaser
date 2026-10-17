@@ -3,7 +3,7 @@ import { FileSpreadsheet, Upload } from 'lucide-react'
 import readXlsxFile from 'read-excel-file/browser'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote, type VendaVendedorRow } from '../lib/importar'
+import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote, type VendaRow, type VendaVendedorRow } from '../lib/importar'
 import { addMeses, fimMes, fmtData, inicioMes, mesAtual } from '../lib/format'
 import type { Importacao } from '../lib/types'
 import { Badge, Empty, ErrorBox, MonthPicker, PageHeader } from '../components/ui'
@@ -12,7 +12,7 @@ const TIPO_LABEL = {
   leads: 'Leads', agendamentos: 'Agendamentos', vendas: 'Vendas', vendas_vendedor: 'Vendas por vendedor', cancelamentos: 'Cancelamentos',
 } as const
 const CHAVE = {
-  leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento', vendas_vendedor: 'dia,estabelecimento,vendedor', cancelamentos: 'orcamento,item',
+  leads: 'id_lead', agendamentos: 'chave', vendas: 'id_orcamento,vendedor', vendas_vendedor: 'dia,estabelecimento,vendedor', cancelamentos: 'orcamento,item',
 } as const
 const LOTE_DB = 500
 
@@ -109,12 +109,32 @@ export default function Importar() {
     }
   }
 
+  /**
+   * Vendas: as linhas de cada orçamento do arquivo substituem as que já existem no banco
+   * (o orçamento pode ter mudado de vendedor ou ter sido dividido entre vendedores).
+   */
+  async function gravarVendas(linhas: VendaRow[]) {
+    const ids = [...new Set(linhas.map((r) => r.id_orcamento))]
+    for (let i = 0; i < ids.length; i += LOTE_DB) {
+      setProgresso(`Vendas: preparando ${Math.min(i + LOTE_DB, ids.length)} de ${ids.length}`)
+      const { error } = await supabase.from('vendas').delete().in('id_orcamento', ids.slice(i, i + LOTE_DB))
+      if (error) throw error
+    }
+    for (let i = 0; i < linhas.length; i += LOTE_DB) {
+      setProgresso(`Vendas: ${Math.min(i + LOTE_DB, linhas.length)} de ${linhas.length}`)
+      const { error } = await supabase.from('vendas').insert(linhas.slice(i, i + LOTE_DB))
+      if (error) throw error
+    }
+  }
+
   async function importar() {
     setErro(null); setOk(null)
     try {
       for (const l of lotes) {
         if (l.tipo === 'vendas_vendedor') {
           await gravarVendasVendedor(l.linhas, l.periodo)
+        } else if (l.tipo === 'vendas') {
+          await gravarVendas(l.linhas)
         } else {
           for (let i = 0; i < l.linhas.length; i += LOTE_DB) {
             setProgresso(`${TIPO_LABEL[l.tipo]}: ${Math.min(i + LOTE_DB, l.linhas.length)} de ${l.linhas.length}`)
