@@ -12,6 +12,7 @@
 //        → devolve um resumo curto (contagens) e baixa o arquivo.
 // =====================================================================
 window.CF = {
+  ITEM_AVALIACAO: '50000000', // Serviço Avulso "AVALIAÇÃO" no ELOS
   esperar: (ms) => new Promise((r) => setTimeout(r, ms)),
   dd: (n) => String(n).padStart(2, '0'),
   data(d) { return `${CF.dd(d.getDate())}/${CF.dd(d.getMonth() + 1)}/${d.getFullYear()}` },
@@ -91,15 +92,14 @@ window.CF = {
 
   /**
    * Exporta. Período padrão: do dia 1º do mês até hoje; nos dias 1 a 3 também o mês anterior inteiro
-   * (para fechar o mês com o que entrou atrasado). Agendamentos: data programada no(s) mês(es) inteiro(s)
-   * + criados no período (duas requisições; o Funil remove repetidos).
+   * (para fechar o mês com o que entrou atrasado). Agendamentos: só o item AVALIAÇÃO, criados no período e
+   * programados até o fim do mês seguinte.
    */
   async exportar(opcoes = {}) {
     const hoje = new Date()
     const iniMes = new Date(hoje.getFullYear(), hoje.getMonth() - (hoje.getDate() <= 3 ? 1 : 0), 1)
     const ini = opcoes.ini || CF.data(iniMes)
     const fim = opcoes.fim || CF.data(hoje)
-    const fimMesAg = CF.data(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0))
     await CF.garantirUnidade()
     await CF.abrirRelatorios()
     const abas = []
@@ -117,26 +117,24 @@ window.CF = {
       resumo.leads = rows.length
     }
 
-    // ---------------- Agendamentos (2 requisições) ----------------
+    // ---------------- Agendamentos (filtros do relatório usado no Funil) ----------------
+    // Data Programada: do dia 1º até o fim do mês seguinte; Data de Criação: do dia 1º até hoje;
+    // Serviço Avulso = AVALIAÇÃO (id 50000000); detalhe por cliente (uma linha por agendamento).
     {
-      const f = CF.frame(/Atendimento > Agendamentos/)
+      const f = CF.frame(/Atendimento > Agendamentos/), $ = f.$
       const prog = CF.dataInput(f, 'Programada'), cria = CF.dataInput(f, 'Criação')
       if (!prog || !cria) throw new Error('AGENDAMENTOS_SEM_CAMPOS_DE_DATA')
-      CF.detalhe(f, ['Establishment', 'Date', 'SchedulerDate', 'Status', 'CreateUser', 'Client'])
-      f.$('#cboStatus').val([]).trigger('change')
-      const longe = (dias) => { const d = new Date(); d.setDate(d.getDate() + dias); return CF.data(d) }
-      // a) data programada no período (até o fim do mês) — avaliações e presenças
-      CF.periodo(f, prog, ini, fimMesAg); CF.periodo(f, cria, CF.data(new Date(hoje.getFullYear() - 1, 0, 1)), fim)
-      const a = await CF.ler(f)
-      // b) criados no período (qualquer data programada) — agendamentos criados por atendente
-      CF.periodo(f, cria, ini, fim); CF.periodo(f, prog, CF.data(new Date(hoje.getFullYear() - 1, 0, 1)), longe(180))
-      const b = await CF.ler(f)
-      const linha = (r) => [r.Establishment, CF.soData(r.Date), CF.soData(r.SchedulerDate), r.Client ?? '', r.ClientPhone ?? '', r.CreateUser ?? '', r.MediaTypeCli ?? '', r.StatusDescription ?? '', r.Quantity ?? 1]
+      CF.detalhe(f, ['Establishment', 'Date', 'Status', 'CreateUser', 'SchedulerDate', 'Client'])
+      $('#cboStatus').val([]).trigger('change')
+      $(f.document.getElementById('ddlServiceItem')).select2('data', { id: CF.ITEM_AVALIACAO, text: 'AVALIAÇÃO' }).trigger('change')
+      CF.periodo(f, prog, ini, CF.data(new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0)))
+      CF.periodo(f, cria, ini, fim)
+      const rows = await CF.ler(f)
       abas.push({ nome: 'Agendamentos', linhas: [
         ['Estabelecimento', 'Data Agendada', 'Data de Criação', 'Cliente', 'Telefone', 'Usuário de Criação', 'Origem Cliente', 'Status', 'Quantidade'],
-        ...a.map(linha), ...b.map(linha),
+        ...rows.map((r) => [r.Establishment, CF.soData(r.Date), CF.soData(r.SchedulerDate), r.Client ?? '', r.ClientPhone ?? '', r.CreateUser ?? '', r.MediaTypeCli ?? '', r.StatusDescription ?? '', r.Quantity ?? 1]),
       ] })
-      resumo.agendamentos = `${a.length} programados + ${b.length} criados`
+      resumo.agendamentos = rows.length
     }
 
     // ---------------- Vendas ----------------

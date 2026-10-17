@@ -11,9 +11,10 @@ export interface LeadRow {
   id_lead: number; data_cadastro: string; estabelecimento: string; atendente: string | null
   midia: string | null; status: string | null; motivo_descarte: string | null; indicacao: boolean | null
 }
+/** quantidade > 1 quando o relatório vem agrupado (exportado sem o detalhe "Cliente") */
 export interface AgendamentoRow {
   chave: string; estabelecimento: string; data_agendada: string; data_criacao: string
-  usuario_criacao: string | null; origem_cliente: string | null; status: string | null
+  usuario_criacao: string | null; origem_cliente: string | null; status: string | null; quantidade: number
 }
 /** vendedor = '' quando o relatório não tem a coluna; um orçamento dividido entre vendedores vem em várias linhas */
 export interface VendaRow {
@@ -46,7 +47,7 @@ const COLUNAS: Record<Tipo, Record<string, string>> = {
   },
   agendamentos: {
     estab: 'estabelecimento', agendada: 'data agendada', criacao: 'data de criacao', cliente: 'cliente',
-    telefone: 'telefone', usuario: 'usuario de criacao', origem: 'origem cliente', status: 'status',
+    telefone: 'telefone', usuario: 'usuario de criacao', origem: 'origem cliente', status: 'status', quantidade: 'quantidade',
   },
   vendas: {
     id: 'id orc', data: 'data de pagamento', estab: 'estabelecimento', origem: 'origem midia', tipo: 'tipo',
@@ -204,15 +205,24 @@ export async function lerLinhas(linhas: Linhas, origem: string): Promise<Lote | 
   }
 
   if (tipo === 'agendamentos') {
+    // com a coluna Cliente: uma linha por cliente (repetidas são descartadas);
+    // sem ela (relatório agrupado): a linha vale "Quantidade" agendamentos e o status entra na chave
+    const porCliente = 'cliente' in idx
     const mapa = new Map<string, AgendamentoRow>()
     for (const row of corpo) {
       const estab = txt(c(row, 'estab')), agendada = paraData(c(row, 'agendada')), criacao = paraData(c(row, 'criacao'))
       if (!estab || !agendada || !criacao) { if (row.some((v) => v != null && v !== '')) ignoradas++; continue }
-      const usuario = txt(c(row, 'usuario'))
-      const chave = await sha256([estab, agendada, criacao, normalizar(c(row, 'cliente')), normalizar(c(row, 'telefone')), usuario ?? ''].join('|'))
+      const usuario = txt(c(row, 'usuario')), status = txt(c(row, 'status'))
+      const qtd = porCliente ? 1 : Math.max(1, Math.round(parseNum(c(row, 'quantidade') as string | number) || 1))
+      const partes = porCliente
+        ? [estab, agendada, criacao, normalizar(c(row, 'cliente')), normalizar(c(row, 'telefone')), usuario ?? '']
+        : [estab, agendada, criacao, usuario ?? '', normalizar(status), 'agrupado']
+      const chave = await sha256(partes.join('|'))
+      const atual = mapa.get(chave)
+      if (atual && !porCliente) { atual.quantidade += qtd; continue }
       mapa.set(chave, {
         chave, estabelecimento: estab, data_agendada: agendada, data_criacao: criacao,
-        usuario_criacao: usuario, origem_cliente: txt(c(row, 'origem')), status: txt(c(row, 'status')),
+        usuario_criacao: usuario, origem_cliente: txt(c(row, 'origem')), status, quantidade: qtd,
       })
     }
     const out = [...mapa.values()]

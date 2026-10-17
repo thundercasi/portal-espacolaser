@@ -3,7 +3,7 @@ import { FileSpreadsheet, Upload } from 'lucide-react'
 import readXlsxFile from 'read-excel-file/browser'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { diagnosticar, lerCSV, lerLinhas, normalizar, type Lote, type VendaRow, type VendaVendedorRow } from '../lib/importar'
+import { diagnosticar, lerCSV, lerLinhas, normalizar, type AgendamentoRow, type Lote, type VendaRow, type VendaVendedorRow } from '../lib/importar'
 import { addMeses, fimMes, fmtData, inicioMes, mesAtual } from '../lib/format'
 import type { Importacao } from '../lib/types'
 import { Badge, Empty, ErrorBox, MonthPicker, PageHeader } from '../components/ui'
@@ -134,6 +134,25 @@ export default function Importar() {
     }
   }
 
+  /**
+   * Agendamentos substituem os já gravados com data de criação no mesmo período e na mesma unidade
+   * (ex.: troca de um arquivo agrupado por um detalhado por cliente sem duplicar).
+   */
+  async function gravarAgendamentos(linhas: AgendamentoRow[]) {
+    const criacoes = linhas.map((r) => r.data_criacao).sort()
+    const ini = criacoes[0], fim = criacoes[criacoes.length - 1]
+    setProgresso('Agendamentos: substituindo o período…')
+    for (const estab of [...new Set(linhas.map((r) => r.estabelecimento))]) {
+      const { error } = await supabase.from('agendamentos').delete().eq('estabelecimento', estab).gte('data_criacao', ini).lte('data_criacao', fim)
+      if (error) throw error
+    }
+    for (let i = 0; i < linhas.length; i += LOTE_DB) {
+      setProgresso(`Agendamentos: ${Math.min(i + LOTE_DB, linhas.length)} de ${linhas.length}`)
+      const { error } = await supabase.from('agendamentos').upsert(linhas.slice(i, i + LOTE_DB), { onConflict: 'chave' })
+      if (error) throw error
+    }
+  }
+
   async function importar() {
     setErro(null); setOk(null)
     try {
@@ -142,6 +161,8 @@ export default function Importar() {
           await gravarVendasVendedor(l.linhas, l.periodo)
         } else if (l.tipo === 'vendas') {
           await gravarVendas(l.linhas)
+        } else if (l.tipo === 'agendamentos') {
+          await gravarAgendamentos(l.linhas)
         } else {
           for (let i = 0; i < l.linhas.length; i += LOTE_DB) {
             setProgresso(`${TIPO_LABEL[l.tipo]}: ${Math.min(i + LOTE_DB, l.linhas.length)} de ${l.linhas.length}`)
