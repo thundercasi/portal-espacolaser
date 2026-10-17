@@ -13,7 +13,7 @@ const dec = (v: number | null | undefined) => (v == null ? '—' : fmtNum(Math.r
 const brl0 = (v: number | null | undefined) => (v == null ? '—' : fmtBRL(Math.round(v)).replace(/,00$/, ''))
 
 export default function Painel() {
-  const { unidades, colaboradores, usuarios } = useApp()
+  const { unidades, colaboradores, usuarios, admin } = useApp()
   const [mes, setMes] = useState(mesAtual())
   const [unidadeId, setUnidadeId] = useState<string>('todas')
   const [linhas, setLinhas] = useState<LinhaPainel[] | null>(null)
@@ -65,12 +65,12 @@ export default function Painel() {
         <>
           {!p.temMeta && (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              Sem metas cadastradas para {nomeMes(mes).toLowerCase()}. <Link to="/metas" className="font-medium underline">Cadastrar metas</Link>
+              Sem metas cadastradas para {nomeMes(mes).toLowerCase()}. {admin && <Link to="/metas" className="font-medium underline">Cadastrar metas</Link>}
             </div>
           )}
           {linhas?.length === 0 && (
             <div className="mb-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-              Nenhum dado importado para este mês. <Link to="/importar" className="font-medium text-brand-700 underline">Importar exportações</Link>
+              Nenhum dado importado para este mês. {admin && <Link to="/importar" className="font-medium text-brand-700 underline">Importar exportações</Link>}
             </div>
           )}
           <Kpis p={p} />

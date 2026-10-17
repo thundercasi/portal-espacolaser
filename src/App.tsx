@@ -26,10 +26,18 @@ function SemAcesso() {
 }
 
 function Rotas() {
-  const { session, membro } = useApp()
+  const { session, membro, admin } = useApp()
   if (!session) return <Login />
   if (membro === null) return null
   if (!membro) return <SemAcesso />
+  // perfil Consulta: só o painel
+  if (!admin) return (
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="*" element={<Painel />} />
+      </Route>
+    </Routes>
+  )
   return (
     <Routes>
       <Route element={<Layout />}>

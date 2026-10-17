@@ -12,7 +12,7 @@ Painel do funil comercial das unidades (Paulista, Medon, Tivoli), substituindo a
 | **Metas** | Por unidade e mês: meta de leads, agendamentos, taxas de comparecimento e conversão, ticket médio, share, meta de faturamento, super meta e calendário de dias úteis. |
 | **Premiações** | Cálculo mensal dos prêmios (planilha "Cálculo Premiações - Padrão"): status Meta/Super por unidade e da rede (gerente), prêmios por faixa de vendas, agendamentos e captações (consultoras), tabela das aplicadoras, % para subgerente e gerente, funcionário do mês, garantido de R$ 300 para consultora sem prêmio (pode ser retirado) e valores fixos de exceção. Regras editáveis na aba Regras. Exporta CSV. |
 | **Cancelamento** | Calculadora de cancelamento (planilha "Cálculo Cancelamento"): vários contratos por cliente, cada um com parcelas, parcelas pagas, sessões para cálculo e multa próprios; áreas com valor e sessões feitas. Mostra total pago, saldo utilizado, multa e saldo devido (ou valor a devolver) e copia um resumo em texto. O último cálculo fica salvo no navegador. |
-| **Cadastros** | Unidades (nome do estabelecimento como na exportação), **Equipe** (pessoa, função, unidade ou rede, valor fixo e o de/para dos usuários do sistema que ela usa — vale para o painel e para as premiações; lista os usuários sem vínculo) e e-mails com acesso. |
+| **Cadastros** | Unidades (nome do estabelecimento como na exportação), **Equipe** (pessoa, função, unidade ou rede, valor fixo e o de/para dos usuários do sistema que ela usa — vale para o painel e para as premiações; lista os usuários sem vínculo) e e-mails com acesso, cada um com perfil **Administrador** (tudo) ou **Consulta** (só o Painel). |
 
 ## Instalação
 
@@ -47,3 +47,8 @@ Diferenças em relação à planilha:
 - **Agendamentos** = criados no mês pelo usuário (Usuário de Criação); **captações** = leads cadastrados no mês pelo usuário.
 - O prêmio só é pago se **Bateu meta** estiver marcado. Funcionário do mês só conta no status Super.
 - A **gerente** fica na Equipe como Rede (sem unidade) e ganha % sobre o líquido das unidades, com o status da Rede.
+
+## Perfis de acesso
+
+- **Administrador**: acessa e altera tudo.
+- **Consulta**: só vê o Painel do funil. A restrição também vale no banco (RLS): o perfil Consulta só lê as tabelas do painel e não altera nada; premiações, vendas por vendedor e cancelamentos ficam visíveis apenas para administradores.

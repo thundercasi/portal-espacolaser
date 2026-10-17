@@ -8,7 +8,7 @@ const NAV = [
   {
     titulo: 'Funil',
     itens: [
-      { to: '/', label: 'Painel', icon: BarChart3, end: true },
+      { to: '/', label: 'Painel', icon: BarChart3, end: true, consulta: true },
       { to: '/importar', label: 'Importar', icon: Upload },
       { to: '/metas', label: 'Metas', icon: Target },
     ],
@@ -30,7 +30,8 @@ const NAV = [
 
 export default function Layout() {
   const [aberto, setAberto] = useState(false)
-  const { session } = useApp()
+  const { session, admin } = useApp()
+  const nav = NAV.map((g) => ({ ...g, itens: g.itens.filter((i) => admin || ('consulta' in i && i.consulta)) })).filter((g) => g.itens.length)
   return (
     <div className="flex min-h-screen">
       <aside className={`fixed inset-y-0 left-0 z-40 w-56 transform bg-slate-900 text-slate-200 transition lg:static lg:translate-x-0 ${aberto ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -42,7 +43,7 @@ export default function Layout() {
           </div>
         </div>
         <nav className="space-y-4 px-3">
-          {NAV.map((grupo) => (
+          {nav.map((grupo) => (
             <div key={grupo.titulo}>
               <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">{grupo.titulo}</div>
               <div className="space-y-0.5">

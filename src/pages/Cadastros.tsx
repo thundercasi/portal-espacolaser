@@ -67,20 +67,32 @@ function Unidades({ setErro }: SetErro) {
   )
 }
 
+type Perfil = 'admin' | 'consulta'
+const PERFIS: { valor: Perfil; nome: string; descricao: string }[] = [
+  { valor: 'admin', nome: 'Administrador', descricao: 'acessa e altera tudo' },
+  { valor: 'consulta', nome: 'Consulta', descricao: 'só vê o Painel' },
+]
+
 function Usuarios({ setErro }: SetErro) {
   const { session } = useApp()
-  const [lista, setLista] = useState<{ email: string }[]>([])
+  const eu = session?.user.email?.toLowerCase()
+  const [lista, setLista] = useState<{ email: string; perfil: Perfil }[]>([])
   const [email, setEmail] = useState('')
-  const carregar = () => supabase.from('membros').select('email').order('email').then(({ data }) => setLista(data ?? []))
+  const [perfil, setPerfil] = useState<Perfil>('consulta')
+  const carregar = () => supabase.from('membros').select('email, perfil').order('email').then(({ data }) => setLista((data ?? []) as { email: string; perfil: Perfil }[]))
   useEffect(() => { carregar() }, [])
 
   async function adicionar() {
     const e = email.trim().toLowerCase()
     if (!e.includes('@')) return
-    const { error } = await supabase.from('membros').insert({ email: e })
+    const { error } = await supabase.from('membros').insert({ email: e, perfil })
     setErro(error?.message ?? null)
     if (!error) setEmail('')
     carregar()
+  }
+  async function mudarPerfil(e: string, p: Perfil) {
+    const { error } = await supabase.from('membros').update({ perfil: p }).eq('email', e)
+    setErro(error?.message ?? null); carregar()
   }
   async function remover(e: string) {
     if (!confirm(`Remover o acesso de ${e}?`)) return
@@ -92,20 +104,35 @@ function Usuarios({ setErro }: SetErro) {
     <section className="card">
       <div className="border-b border-slate-100 px-4 py-3">
         <div className="text-sm font-semibold">Usuários com acesso</div>
-        <p className="text-xs text-slate-500">A pessoa cria a conta na tela de login com um destes e-mails. Todos veem e editam os mesmos dados.</p>
+        <p className="text-xs text-slate-500">
+          A pessoa cria a conta na tela de login com um destes e-mails. <b>Administrador</b> acessa e altera tudo;
+          <b> Consulta</b> só vê o Painel do funil.
+        </p>
       </div>
       <ul className="divide-y divide-slate-100">
         {lista.map((m) => (
-          <li key={m.email} className="flex items-center justify-between px-4 py-2 text-sm">
-            <span>{m.email}</span>
-            {m.email !== session?.user.email?.toLowerCase() && (
-              <button className="btn-danger p-1.5" onClick={() => remover(m.email)} aria-label="Remover"><Trash2 size={16} /></button>
-            )}
+          <li key={m.email} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm">
+            <span className="min-w-56">{m.email}{m.email === eu && <span className="ml-2 text-xs text-slate-400">(você)</span>}</span>
+            <span className="flex items-center gap-2">
+              {m.email === eu ? (
+                <span className="text-slate-600">{PERFIS.find((p) => p.valor === m.perfil)?.nome}</span>
+              ) : (
+                <>
+                  <select className="input w-40" value={m.perfil} onChange={(e) => mudarPerfil(m.email, e.target.value as Perfil)}>
+                    {PERFIS.map((p) => <option key={p.valor} value={p.valor}>{p.nome}</option>)}
+                  </select>
+                  <button className="btn-danger p-1.5" onClick={() => remover(m.email)} aria-label="Remover"><Trash2 size={16} /></button>
+                </>
+              )}
+            </span>
           </li>
         ))}
       </ul>
-      <div className="flex gap-2 border-t border-slate-100 p-4">
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 p-4">
         <input className="input max-w-sm" type="email" placeholder="email@exemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && adicionar()} />
+        <select className="input w-56" value={perfil} onChange={(e) => setPerfil(e.target.value as Perfil)}>
+          {PERFIS.map((p) => <option key={p.valor} value={p.valor}>{p.nome} — {p.descricao}</option>)}
+        </select>
         <button className="btn-primary" onClick={adicionar}><Plus size={16} /> Adicionar</button>
       </div>
     </section>
