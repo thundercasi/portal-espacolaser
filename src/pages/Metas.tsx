@@ -4,12 +4,18 @@ import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import { addMeses, fmtBRL, fmtNum, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import type { Meta } from '../lib/types'
+import { PESOS_DEZENAS_PADRAO } from '../lib/painel'
 import { ErrorBox, Field, MonthPicker, NumInput, PageHeader, PctInput } from '../components/ui'
 
 const vazia = (unidade_id: string, mes: string): Meta => ({
   unidade_id, mes: inicioMes(mes), meta_leads: 0, meta_agendamentos: 0, taxa_comparecimento: 0.26, taxa_conversao: 0.51,
   ticket_medio: 1500, share_avaliacoes: 0.37, meta_faturamento: 0, super_meta: 0, dias_nao_uteis: [], dias_uteis_extra: [],
+  pesos_dezenas: [...PESOS_DEZENAS_PADRAO],
 })
+// meses de 31 dias: 1–11, 12–21, 22–31 (mesma regra de src/lib/painel.ts)
+const nomesDezenas = (diasNoMes: number) => diasNoMes === 31
+  ? ['1ª dezena (1–11)', '2ª dezena (12–21)', '3ª dezena (22–31)']
+  : ['1ª dezena (1–10)', '2ª dezena (11–20)', `3ª dezena (21–${diasNoMes})`]
 
 export default function Metas() {
   const { unidades } = useApp()
@@ -32,7 +38,7 @@ export default function Metas() {
     supabase.from('metas').select('*').eq('unidade_id', uid).eq('mes', inicioMes(mes)).maybeSingle().then(({ data }) => {
       if (!vivo) return
       setExiste(Boolean(data))
-      setM(data ? (data as Meta) : vazia(uid, mes))
+      setM(data ? normalizarMeta(data as Meta) : vazia(uid, mes))
     })
     return () => { vivo = false }
   }, [uid, mes])
@@ -42,11 +48,13 @@ export default function Metas() {
     const { data } = await supabase.from('metas').select('*').eq('unidade_id', uid).eq('mes', ant).maybeSingle()
     if (!data) { setErro(`Não há metas em ${nomeMes(ant.slice(0, 7)).toLowerCase()} para copiar.`); return }
     setErro(null)
-    setM({ ...(data as Meta), mes: inicioMes(mes), dias_nao_uteis: [], dias_uteis_extra: [] })
+    setM({ ...normalizarMeta(data as Meta), mes: inicioMes(mes), dias_nao_uteis: [], dias_uteis_extra: [] })
   }
 
   async function salvar() {
     if (!m) return
+    const somaPesos = m.pesos_dezenas.reduce((a, b) => a + b, 0)
+    if (Math.abs(somaPesos - 1) > 0.0005) { setErro(`Os pesos das dezenas somam ${(somaPesos * 100).toFixed(2)}%; precisam somar 100%.`); return }
     setBusy(true); setErro(null); setMsg(null)
     const { error } = await supabase.from('metas').upsert({ ...m, updated_at: new Date().toISOString() })
     if (error) setErro(error.message)
@@ -79,6 +87,9 @@ export default function Metas() {
   const vendas = m ? pres * m.taxa_conversao : 0
   const rAv = m ? vendas * m.ticket_medio : 0
   const rClinica = m && m.share_avaliacoes ? rAv / m.share_avaliacoes : 0
+  const metaFat = m ? (m.meta_faturamento > 0 ? m.meta_faturamento : rClinica) : 0
+  const somaPesos = m ? m.pesos_dezenas.reduce((a, b) => a + b, 0) : 1
+  const setPeso = (k: number, v: number) => m && set('pesos_dezenas', m.pesos_dezenas.map((p, i) => (i === k ? v : p)))
 
   return (
     <div>
@@ -117,6 +128,28 @@ export default function Metas() {
               </div>
               <p className="mt-2 text-xs text-slate-500">No painel, a meta de R$ total usa a meta de faturamento; se ela estiver zerada, usa o R$ clínica calculado pelo share. As metas de leads e agendamentos são divididas igualmente entre as atendentes marcadas como "participa da meta".</p>
             </div>
+            <div className="mt-5 rounded-lg border border-slate-200 p-3 text-sm">
+              <div className="mb-1 font-medium">Metas por dezena</div>
+              <p className="mb-3 text-xs text-slate-500">
+                Parte da meta do mês em cada dezena para avaliações, presenças, vendas e faturamento.
+                Leads e agendamentos criados são divididos igualmente (1/3 em cada dezena), como na planilha.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {nomesDezenas(n).map((nome, k) => (
+                  <div key={nome}>
+                    <span className="label">{nome}</span>
+                    <PctInput value={m.pesos_dezenas[k] ?? 0} onChange={(v) => setPeso(k, v)} />
+                    <div className="mt-1 text-xs text-slate-500">
+                      R$ {fmtNum(Math.round(metaFat * (m.pesos_dezenas[k] ?? 0)))} · {fmtNum(Math.round((m.meta_leads / 3) * 10) / 10)} leads
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <span className={Math.abs(somaPesos - 1) > 0.0005 ? 'font-medium text-red-600' : 'text-slate-500'}>Soma: {(somaPesos * 100).toFixed(2)}%</span>
+                <button className="text-slate-500 hover:underline" onClick={() => set('pesos_dezenas', [...PESOS_DEZENAS_PADRAO])}>Voltar aos pesos padrão</button>
+              </div>
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <button className="btn-ghost" onClick={copiarAnterior}><Copy size={16} /> Copiar do mês anterior</button>
               <button className="btn-primary" onClick={salvar} disabled={busy}><Save size={16} /> Salvar</button>
@@ -141,4 +174,10 @@ export default function Metas() {
       )}
     </div>
   )
+}
+
+/** metas antigas, gravadas antes dos pesos das dezenas, ficam com o padrão */
+function normalizarMeta(x: Meta): Meta {
+  const p = (x.pesos_dezenas ?? []).map(Number)
+  return { ...x, pesos_dezenas: p.length === 3 ? p : [...PESOS_DEZENAS_PADRAO] }
 }

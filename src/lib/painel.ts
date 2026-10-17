@@ -15,6 +15,31 @@ export interface Indicador {
   tendencia: number | null
 }
 
+/** pesos padrão das dezenas (aba Auxiliar da planilha): parte da meta do mês em cada dezena */
+export const PESOS_DEZENAS_PADRAO = [0.29759594535506, 0.317992269788348, 0.384411784856592]
+
+/** os mesmos indicadores do mês, calculados para um período (dezena) */
+export interface ConjuntoIndicadores {
+  leads: Record<string, Indicador>
+  agend: Record<string, Indicador>
+  leadsTotal: Indicador
+  agendTotal: Indicador
+  avaliacoes: Indicador
+  presencas: Indicador
+  vendasAvQtd: Indicador
+  vendasAvValor: Indicador
+  vendasTotal: Indicador
+}
+
+export interface Dezena {
+  numero: 1 | 2 | 3
+  inicio: number
+  fim: number
+  atual: boolean           // hoje está nesta dezena
+  periodo: ConjuntoIndicadores    // só os dias da dezena
+  acumulado: ConjuntoIndicadores  // do dia 1 até o fim da dezena (como na planilha)
+}
+
 export interface Painel {
   diasNoMes: number
   util: boolean[]              // índice = dia (1..31)
@@ -49,6 +74,7 @@ export interface Painel {
   }
   superMeta: number | null
   temMeta: boolean
+  dezenas: Dezena[]
 }
 
 const soma = (a: number[]) => a.reduce((s, v) => s + v, 0)
@@ -195,6 +221,58 @@ export function calcularPainel(args: {
     vendasTotal: indicador(vendasTotal, temMeta ? metaTotal : null),
   }
 
+  // ---------------------------------------------------------------------
+  // Dezenas (1–10, 11–20, 21–fim; em meses de 31 dias, 1–11, 12–21, 22–31). Como na planilha: leads e agendamentos criados
+  // dividem a meta em 3 partes iguais; os demais indicadores usam os pesos das dezenas.
+  // ---------------------------------------------------------------------
+  const pesos = (x: Meta) => (x.pesos_dezenas?.length === 3 ? x.pesos_dezenas.map(Number) : PESOS_DEZENAS_PADRAO)
+  const porDezena = (f: (x: Meta) => number, igual: boolean) =>
+    [0, 1, 2].map((k) => metasSel.reduce((s, x) => s + f(x) * (igual ? 1 / 3 : pesos(x)[k]), 0))
+  const mDez = {
+    leads: porDezena((x) => Number(x.meta_leads), true),
+    agend: porDezena((x) => Number(x.meta_agendamentos), true),
+    avaliacoes: porDezena((x) => Number(x.meta_agendamentos), false),
+    presencas: porDezena((x) => Number(x.meta_agendamentos) * Number(x.taxa_comparecimento), false),
+    vendasAvQtd: porDezena((x) => Number(x.meta_agendamentos) * Number(x.taxa_comparecimento) * Number(x.taxa_conversao), false),
+    vendasAvValor: porDezena((x) => Number(x.meta_agendamentos) * Number(x.taxa_comparecimento) * Number(x.taxa_conversao) * Number(x.ticket_medio), false),
+    vendasTotal: porDezena((x) => Number(x.meta_faturamento) > 0
+      ? Number(x.meta_faturamento)
+      : (Number(x.meta_agendamentos) * Number(x.taxa_comparecimento) * Number(x.taxa_conversao) * Number(x.ticket_medio)) / (Number(x.share_avaliacoes) || 1), false),
+  }
+  // meses de 31 dias: 1–11, 12–21, 22–31; demais: 1–10, 11–20, 21–fim
+  const limites: [number, number][] = n === 31 ? [[1, 11], [12, 21], [22, 31]] : [[1, 10], [11, 20], [21, n]]
+  const somaDias = (serie: number[], a: number, b: number) => { let t = 0; for (let d = a; d <= b; d++) t += serie[d]; return t }
+  const uteisRestantes = (a: number, b: number) => { let t = 0; for (let d = Math.max(a, diaHoje); d <= b; d++) if (util[d]) t++; return t }
+  const indPeriodo = (serie: number[], meta: number | null, a: number, b: number): Indicador => {
+    const realizado = somaDias(serie, a, b)
+    const restante = meta == null ? null : meta - realizado
+    const dr = uteisRestantes(a, b)
+    return { realizado, meta, restante, metaDia: restante == null || !dr ? null : Math.max(restante, 0) / dr, tendencia: null }
+  }
+  const conjunto = (a: number, b: number, meta: (m: number[]) => number): ConjuntoIndicadores => {
+    const mm = (m: number[]) => (temMeta ? meta(m) : null)
+    const pessoa = (m: number[], c: Coluna) => (temMeta ? (c.participaMeta && participantes ? meta(m) / participantes : 0) : null)
+    return {
+      leads: Object.fromEntries(colunas.map((c) => [c.chave, indPeriodo(leads[c.chave], pessoa(mDez.leads, c), a, b)])),
+      agend: Object.fromEntries(colunas.map((c) => [c.chave, indPeriodo(agend[c.chave], pessoa(mDez.agend, c), a, b)])),
+      leadsTotal: indPeriodo(leadsTotalSerie, mm(mDez.leads), a, b),
+      agendTotal: indPeriodo(agendTotalSerie, mm(mDez.agend), a, b),
+      avaliacoes: indPeriodo(avaliacoes, mm(mDez.avaliacoes), a, b),
+      presencas: indPeriodo(presencas, mm(mDez.presencas), a, b),
+      vendasAvQtd: indPeriodo(vendasAvQtd, mm(mDez.vendasAvQtd), a, b),
+      vendasAvValor: indPeriodo(vendasAvValor, mm(mDez.vendasAvValor), a, b),
+      vendasTotal: indPeriodo(vendasTotal, mm(mDez.vendasTotal), a, b),
+    }
+  }
+  const dezenas: Dezena[] = limites.map(([a, b], k) => ({
+    numero: (k + 1) as 1 | 2 | 3,
+    inicio: a,
+    fim: b,
+    atual: diaHoje >= a && diaHoje <= b,
+    periodo: conjunto(a, b, (m) => m[k]),
+    acumulado: conjunto(1, b, (m) => m.slice(0, k + 1).reduce((x, y) => x + y, 0)),
+  }))
+
   const r = (x: number | null) => (temMeta ? x : null)
   return {
     diasNoMes: n, util, diasUteis, diasPassados, diasRestantes,
@@ -208,5 +286,6 @@ export function calcularPainel(args: {
     },
     superMeta: temMeta && superMeta > 0 ? superMeta : null,
     temMeta,
+    dezenas,
   }
 }

@@ -52,3 +52,7 @@ Diferenças em relação à planilha:
 
 - **Administrador**: acessa e altera tudo.
 - **Consulta**: só vê o Painel do funil, das unidades marcadas no cadastro do usuário (nenhuma marcada = todas). A restrição também vale no banco (RLS): o perfil Consulta só lê as tabelas do painel e não altera nada; premiações, vendas por vendedor e cancelamentos ficam visíveis apenas para administradores.
+
+## Dezenas
+
+O mês é dividido em 3 dezenas: 1–10, 11–20 e 21–fim (em meses de 31 dias, 1–11, 12–21 e 22–31). Leads e agendamentos criados dividem a meta do mês igualmente entre as dezenas; avaliações, presenças, vendas e faturamento usam os pesos das dezenas cadastrados em Metas (padrão da planilha: 29,76%, 31,80% e 38,44%). O Painel mostra o quadro de dezenas (meta × realizado de cada uma) e, no dia a dia, o acumulado ao fim da 1ª e da 2ª dezena com meta, restante e meta por dia.

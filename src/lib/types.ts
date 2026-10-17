@@ -42,6 +42,7 @@ export interface Meta {
   super_meta: number
   dias_nao_uteis: number[]
   dias_uteis_extra: number[]
+  pesos_dezenas: number[] // parte da meta do mês em cada dezena (1–10, 11–20, 21–fim)
 }
 
 /** linha devolvida pela função painel_diario */

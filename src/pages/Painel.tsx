@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
-import { calcularPainel, ORIGENS_AVALIACAO, type Indicador, type Painel as TPainel } from '../lib/painel'
+import { calcularPainel, ORIGENS_AVALIACAO, type ConjuntoIndicadores, type Indicador, type Painel as TPainel } from '../lib/painel'
 import { fimMes, fmtBRL, fmtNum, fmtPct, hojeISO, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import type { LinhaPainel, Meta } from '../lib/types'
 import { ErrorBox, MonthPicker, PageHeader } from '../components/ui'
@@ -79,6 +79,7 @@ export default function Painel() {
             <div className="xl:col-span-3"><Funil p={p} /></div>
             <div className="xl:col-span-2"><Grafico p={p} /></div>
           </div>
+          {p.temMeta && <QuadroDezenas p={p} />}
           <TabelaDiaria p={p} />
         </>
       )}
@@ -210,19 +211,94 @@ function Grafico({ p }: { p: TPainel }) {
   )
 }
 
+function QuadroDezenas({ p }: { p: TPainel }) {
+  const linhas: { nome: string; k: keyof ConjuntoIndicadores; fmt: (v: number | null) => string }[] = [
+    { nome: 'Leads', k: 'leadsTotal', fmt: int },
+    { nome: 'Agend. criados', k: 'agendTotal', fmt: int },
+    { nome: 'Avaliações', k: 'avaliacoes', fmt: int },
+    { nome: 'Presenças', k: 'presencas', fmt: dec },
+    { nome: 'Vendas av (qtd)', k: 'vendasAvQtd', fmt: dec },
+    { nome: 'R$ vendas av', k: 'vendasAvValor', fmt: brl0 },
+    { nome: 'R$ vendas total', k: 'vendasTotal', fmt: brl0 },
+  ]
+  const sep = 'border-l border-slate-200'
+  return (
+    <div className="card mt-4 overflow-x-auto">
+      <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Dezenas — meta × realizado de cada dezena</div>
+      <table className="w-full text-right">
+        <thead className="bg-slate-50">
+          <tr className="text-[11px]">
+            <th className="th" />
+            {p.dezenas.map((d) => (
+              <th key={d.numero} colSpan={3} className={`th text-center ${sep} ${d.atual ? 'bg-brand-50 text-brand-700' : ''}`}>
+                {d.numero}ª dezena ({d.inicio}–{d.fim}){d.atual ? ' · atual' : ''}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <th className="th text-left">Indicador</th>
+            {p.dezenas.map((d) => [
+              <th key={`${d.numero}r`} className={`th text-right ${sep}`}>Realizado</th>,
+              <th key={`${d.numero}m`} className="th text-right">Meta</th>,
+              <th key={`${d.numero}p`} className="th text-right">%</th>,
+            ])}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100 tabular-nums">
+          {linhas.map((l) => (
+            <tr key={l.k}>
+              <td className="td text-left font-medium">{l.nome}</td>
+              {p.dezenas.map((d) => {
+                const i = d.periodo[l.k] as Indicador
+                const pct = i.meta ? i.realizado / i.meta : null
+                return [
+                  <td key={`${d.numero}r`} className={`td font-medium ${sep}`}>{l.fmt(i.realizado)}</td>,
+                  <td key={`${d.numero}m`} className="td text-slate-500">{l.fmt(i.meta)}</td>,
+                  <td key={`${d.numero}p`} className={`td ${pct == null ? '' : pct >= 1 ? 'font-medium text-emerald-700' : 'text-slate-500'}`}>{pct == null ? '—' : fmtPct(pct, 0)}</td>,
+                ]
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function TabelaDiaria({ p }: { p: TPainel }) {
   const cols = p.colunas
   const pct = (a: number, b: number) => (b ? fmtPct(a / b, 0) : '—')
-  type Rodape = { nome: string; v: (i: Indicador) => number | null }
-  const rodapes: Rodape[] = [
+  type Resumo = { nome: string; v: (i: Indicador) => number | null }
+  const base: Resumo[] = [
     { nome: 'Realizado', v: (i) => i.realizado },
     { nome: 'Meta', v: (i) => i.meta },
     { nome: 'Restante', v: (i) => i.restante },
     { nome: 'Meta/dia', v: (i) => i.metaDia },
-    { nome: 'Tendência', v: (i) => i.tendencia },
   ]
+  const rodapes: Resumo[] = [...base, { nome: 'Tendência', v: (i) => i.tendencia }]
   const sep = 'border-l border-slate-200'
   const dias = Array.from({ length: p.diasNoMes }, (_, k) => k + 1)
+
+  const linhasResumo = (conj: ConjuntoIndicadores, lista: Resumo[], prefixo: string, comTaxas: boolean, classe: string) => lista.map((r) => {
+    const dx = r.nome === 'Realizado' || r.nome === 'Meta' || r.nome === 'Restante' ? int : dec
+    return (
+      <tr key={prefixo + r.nome} className={`font-medium ${classe}`}>
+        <td className="td text-left text-xs uppercase tracking-wide text-slate-500">{r.nome}</td>
+        {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(conj.leads[c.chave]))}</td>)}
+        <td className="td">{dx(r.v(conj.leadsTotal))}</td>
+        {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(conj.agend[c.chave]))}</td>)}
+        <td className="td">{dx(r.v(conj.agendTotal))}</td>
+        <td className={`td ${sep}`}>{dx(r.v(conj.avaliacoes))}</td>
+        <td className="td">{dec(r.v(conj.presencas))}</td>
+        <td className="td text-slate-500">{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.comparecimento.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.comparecimento.meta, 0) : ''}</td>
+        <td className={`td ${sep}`}>{dec(r.v(conj.vendasAvQtd))}</td>
+        <td className="td text-slate-500">{comTaxas && r.nome === 'Realizado' ? fmtPct(p.taxas.conversao.real, 0) : comTaxas && r.nome === 'Meta' ? fmtPct(p.taxas.conversao.meta, 0) : ''}</td>
+        <td className="td">{brl0(r.v(conj.vendasAvValor))}</td>
+        <td className="td">{brl0(r.v(conj.vendasTotal))}</td>
+      </tr>
+    )
+  })
+
   return (
     <div className="card mt-4 overflow-x-auto">
       <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Dia a dia</div>
@@ -249,7 +325,9 @@ function TabelaDiaria({ p }: { p: TPainel }) {
           {dias.map((d) => {
             const tl = cols.reduce((s, c) => s + p.leads[c.chave][d], 0)
             const ta = cols.reduce((s, c) => s + p.agend[c.chave][d], 0)
-            return (
+            // subtotal acumulado ao fim da 1ª e da 2ª dezena (o fim do mês fica no rodapé)
+            const dez = p.dezenas.find((x) => x.fim === d && x.numero < 3)
+            return [
               <tr key={d} className={p.util[d] ? '' : 'bg-slate-50 text-slate-400'}>
                 <td className="td text-left font-medium">{d}</td>
                 {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{p.leads[c.chave][d] || ''}</td>)}
@@ -263,31 +341,20 @@ function TabelaDiaria({ p }: { p: TPainel }) {
                 <td className="td text-slate-500">{p.presencas[d] ? pct(p.vendasAvQtd[d], p.presencas[d]) : ''}</td>
                 <td className="td">{p.vendasAvValor[d] ? brl0(p.vendasAvValor[d]) : ''}</td>
                 <td className="td">{p.vendasTotal[d] ? brl0(p.vendasTotal[d]) : ''}</td>
-              </tr>
-            )
+              </tr>,
+              dez && (
+                <tr key={`dz${dez.numero}`} className="border-t-2 border-brand-100 bg-brand-50">
+                  <td className="td text-left text-xs font-semibold text-brand-700" colSpan={2 * cols.length + 10}>
+                    Acumulado até o dia {dez.fim} ({dez.numero === 1 ? '1ª dezena' : '1ª + 2ª dezenas'})
+                  </td>
+                </tr>
+              ),
+              dez && linhasResumo(dez.acumulado, base, `dz${dez.numero}`, false, 'bg-brand-50/60'),
+            ]
           })}
         </tbody>
         <tfoot className="border-t-2 border-slate-200 bg-slate-50 tabular-nums">
-          {rodapes.map((r) => {
-            const { ind } = p
-            const dx = r.nome === 'Realizado' || r.nome === 'Meta' || r.nome === 'Restante' ? int : dec
-            return (
-              <tr key={r.nome} className="font-medium">
-                <td className="td text-left text-xs uppercase tracking-wide text-slate-500">{r.nome}</td>
-                {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(ind.leads[c.chave]))}</td>)}
-                <td className="td">{dx(r.v(ind.leadsTotal))}</td>
-                {cols.map((c, k) => <td key={c.chave} className={`td ${k === 0 ? sep : ''}`}>{dx(r.v(ind.agend[c.chave]))}</td>)}
-                <td className="td">{dx(r.v(ind.agendTotal))}</td>
-                <td className={`td ${sep}`}>{dx(r.v(ind.avaliacoes))}</td>
-                <td className="td">{dec(r.v(ind.presencas))}</td>
-                <td className="td text-slate-500">{r.nome === 'Realizado' ? fmtPct(p.taxas.comparecimento.real, 0) : r.nome === 'Meta' ? fmtPct(p.taxas.comparecimento.meta, 0) : ''}</td>
-                <td className={`td ${sep}`}>{dec(r.v(ind.vendasAvQtd))}</td>
-                <td className="td text-slate-500">{r.nome === 'Realizado' ? fmtPct(p.taxas.conversao.real, 0) : r.nome === 'Meta' ? fmtPct(p.taxas.conversao.meta, 0) : ''}</td>
-                <td className="td">{brl0(r.v(ind.vendasAvValor))}</td>
-                <td className="td">{brl0(r.v(ind.vendasTotal))}</td>
-              </tr>
-            )
-          })}
+          {linhasResumo(p.ind, rodapes, 'mes', true, '')}
         </tfoot>
       </table>
     </div>
