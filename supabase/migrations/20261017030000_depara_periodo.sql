@@ -27,4 +27,4 @@ update public.vendas_vendedor set dia = mes, sem_data = true;
 alter table public.vendas_vendedor alter column dia set not null;
 alter table public.vendas_vendedor drop constraint vendas_vendedor_pkey;
 alter table public.vendas_vendedor add primary key (dia, estabelecimento, vendedor);
-alter table public.vendas_vendedor add constraint vendas_vendedor_mes_check check (mes = date_trunc('month', dia)::date);
+alter table public.vendas_vendedor add constraint vendas_vendedor_mes_dia_check check (mes = date_trunc('month', dia)::date);
