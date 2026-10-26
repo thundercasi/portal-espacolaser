@@ -40,7 +40,8 @@ export default function DisputaPage() {
   const vendas = aba.tipo === 'vendas_aplicadoras'
   const [disputa, setDisputa] = useState<Disputa | null>(null)
   const [linhas, setLinhas] = useState<Linha[] | null>(null)
-  const [semCadastro, setSemCadastro] = useState<SemCadastro[]>([])  const [unidade, setUnidade] = useState('todas')
+  const [semCadastro, setSemCadastro] = useState<SemCadastro[]>([])
+  const [unidade, setUnidade] = useState('todas')
   const [erro, setErro] = useState<string | null>(null)
   const [atualizado, setAtualizado] = useState<Date | null>(null)
   const [cheia, setCheia] = useState(false)
