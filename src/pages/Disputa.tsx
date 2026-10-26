@@ -40,9 +40,7 @@ export default function DisputaPage() {
   const vendas = aba.tipo === 'vendas_aplicadoras'
   const [disputa, setDisputa] = useState<Disputa | null>(null)
   const [linhas, setLinhas] = useState<Linha[] | null>(null)
-  const [semCadastro, setSemCadastro] = useState<SemCadastro[]>([])
-  const [corte, setCorte] = useState<string | null>(null)
-  const [unidade, setUnidade] = useState('todas')
+  const [semCadastro, setSemCadastro] = useState<SemCadastro[]>([])  const [unidade, setUnidade] = useState('todas')
   const [erro, setErro] = useState<string | null>(null)
   const [atualizado, setAtualizado] = useState<Date | null>(null)
   const [cheia, setCheia] = useState(false)
@@ -55,13 +53,10 @@ export default function DisputaPage() {
     if (aba.tipo === 'comparecimentos') {
       const r = await supabase.rpc('ranking_disputa', { p_disputa: d.data.id })
       if (r.error) { setErro(r.error.message); return }
-      const dados = (r.data ?? []) as { participante: string; unidade: string; leads: number; comparecimentos: number; agendados: number; compareceram: number; corte: string }[]
-      setLinhas(dados.map((x) => {
-        // taxa só com avaliações até o corte: as futuras ainda não tiveram chance de comparecer
-        const agend = Number(x.agendados), taxa = Number(x.compareceram) / (agend || 1)
-        return { participante: x.participante, unidade: x.unidade, pontos: Number(x.comparecimentos), desempate: taxa, detalhe: `${x.leads} leads · ${agend} agendados`, taxa: agend ? `${fmtPct(taxa, 1)} de comparecimento` : 'sem agendados até o corte' }
+      setLinhas(((r.data ?? []) as { participante: string; unidade: string; leads: number; comparecimentos: number }[]).map((x) => {
+        const leads = Number(x.leads), comp = Number(x.comparecimentos)
+        return { participante: x.participante, unidade: x.unidade, pontos: comp, desempate: comp / (leads || 1), detalhe: `${leads} leads`, taxa: `${fmtPct(comp / (leads || 1), 1)} compareceram` }
       }))
-      setCorte(dados[0]?.corte ?? null)
       setSemCadastro([])
     } else {
       const r = await supabase.rpc('ranking_vendas_aplicadoras', { p_disputa: d.data.id })
@@ -212,7 +207,7 @@ export default function DisputaPage() {
                     <div className={`${vendas ? 'text-xl' : 'text-2xl'} font-bold tabular-nums text-slate-900`}>{fmtPontos(l.pontos)}</div>
                     <div className="text-[11px] text-slate-500">{vendas ? 'em vendas' : 'comparec.'}</div>
                   </div>
-                  <div className="hidden w-48 text-right text-sm text-slate-600 sm:block">
+                  <div className="hidden w-32 text-right text-sm text-slate-600 sm:block">
                     <div className="tabular-nums">{l.detalhe}</div>
                     <div className="text-[11px] text-slate-500">{l.taxa}</div>
                   </div>
@@ -223,7 +218,7 @@ export default function DisputaPage() {
           <p className="mt-3 text-xs text-slate-500">
             {vendas
               ? 'Empate: vence quem tiver mais vendas. Valor líquido do relatório de vendas do ELOS: venda cancelada no próprio mês sai do relatório; cancelamento posterior entra negativo na data do cancelamento.'
-              : `Taxa de comparecimento = clientes que compareceram ÷ clientes agendados, considerando só avaliações marcadas até ${corte ? fmtData(corte) : 'a última atualização'} (as futuras ainda não tiveram chance de comparecer). Empate: vence a maior taxa. Lead e avaliação são ligados pelo telefone do cliente; leads com telefone oculto no ELOS não pontuam.`}
+              : 'Empate: vence quem tiver a maior taxa de comparecimento (comparecimentos ÷ leads captados). Lead e avaliação são ligados pelo telefone do cliente; leads com telefone oculto no ELOS não pontuam.'}
           </p>
         </>
       )}
