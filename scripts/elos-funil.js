@@ -125,7 +125,7 @@ window.CF = {
     }
 
     // ---------------- Agendamentos (filtros do relatório usado no Funil) ----------------
-    // Data Programada: do dia 1º até o fim do mês seguinte; Data de Criação: do dia 1º até hoje;
+    // Data Programada: do 1º dia do mês anterior até o fim do mês seguinte; Data de Criação: desde o mês anterior até hoje;
     // Serviço Avulso = AVALIAÇÃO (id 50000000); detalhe por cliente (uma linha por agendamento).
     {
       const f = CF.frame(/Atendimento > Agendamentos/), $ = f.$
@@ -134,9 +134,16 @@ window.CF = {
       CF.detalhe(f, ['Establishment', 'Date', 'Status', 'CreateUser', 'SchedulerDate', 'Client'])
       $('#cboStatus').val([]).trigger('change')
       $(f.document.getElementById('ddlServiceItem')).select2('data', { id: CF.ITEM_AVALIACAO, text: 'AVALIAÇÃO' }).trigger('change')
-      CF.periodo(f, prog, ini2, CF.data(new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0)))
-      CF.periodo(f, cria, ini2, fim)
-      const rows = await CF.ler(f)
+      // o ELOS devolve vazio (sem erro) se a Data Programada passar de ~2 meses: lê um mês por vez
+      const rows = []
+      const [, m2, a2] = ini2.split('/').map(Number)
+      for (let k = 0; ; k++) {
+        const de = new Date(a2, m2 - 1 + k, 1)
+        if (de > new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1)) break
+        CF.periodo(f, prog, CF.data(de), CF.data(new Date(de.getFullYear(), de.getMonth() + 1, 0)))
+        CF.periodo(f, cria, ini2, fim)
+        rows.push(...await CF.ler(f))
+      }
       abas.push({ nome: 'Agendamentos', linhas: [
         ['Estabelecimento', 'Data Agendada', 'Data de Criação', 'Cliente', 'Telefone', 'Usuário de Criação', 'Origem Cliente', 'Status', 'Quantidade'],
         ...rows.map((r) => [r.Establishment, CF.soData(r.Date), CF.soData(r.SchedulerDate), r.Client ?? '', r.ClientPhone ?? '', r.CreateUser ?? '', r.MediaTypeCli ?? '', r.StatusDescription ?? '', r.Quantity ?? 1]),
