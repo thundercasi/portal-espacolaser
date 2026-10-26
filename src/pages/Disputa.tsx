@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Crown, Maximize2, Minimize2, RefreshCw, Smartphone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useApp } from '../lib/AppContext'
 import { fmtBRL, fmtData, fmtPct, hojeISO } from '../lib/format'
 import { ErrorBox } from '../components/ui'
 
@@ -10,7 +9,6 @@ type Tipo = 'comparecimentos' | 'vendas_aplicadoras'
 interface Disputa { id: string; nome: string; premio: string | null; inicio: string; fim: string; tipo: Tipo }
 // linha comum às duas disputas: pontos decide a posição; detalhe/taxa são o texto de apoio
 interface Linha { participante: string; unidade: string; pontos: number; desempate: number; detalhe: string; taxa: string }
-interface SemCadastro { usuario: string; unidade: string; valor: number }
 
 const ABAS: { tipo: Tipo; param: string; rotulo: string }[] = [
   { tipo: 'comparecimentos', param: 'consultoras', rotulo: 'Consultoras · Comparecimentos' },
@@ -34,13 +32,11 @@ const brl0 = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL'
 const diasEntre = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000)
 
 export default function DisputaPage() {
-  const { admin } = useApp()
   const [params, setParams] = useSearchParams()
   const aba = ABAS.find((a) => a.param === params.get('d')) ?? ABAS[0]
   const vendas = aba.tipo === 'vendas_aplicadoras'
   const [disputa, setDisputa] = useState<Disputa | null>(null)
   const [linhas, setLinhas] = useState<Linha[] | null>(null)
-  const [semCadastro, setSemCadastro] = useState<SemCadastro[]>([])
   const [unidade, setUnidade] = useState('todas')
   const [erro, setErro] = useState<string | null>(null)
   const [atualizado, setAtualizado] = useState<Date | null>(null)
@@ -49,7 +45,7 @@ export default function DisputaPage() {
   const carregar = useCallback(async () => {
     const d = await supabase.from('disputas').select('*').eq('ativa', true).eq('tipo', aba.tipo).order('fim', { ascending: false }).limit(1).maybeSingle()
     if (d.error) { setErro(d.error.message); return }
-    if (!d.data) { setDisputa(null); setLinhas([]); setSemCadastro([]); return }
+    if (!d.data) { setDisputa(null); setLinhas([]); return }
     setDisputa(d.data as Disputa)
     if (aba.tipo === 'comparecimentos') {
       const r = await supabase.rpc('ranking_disputa', { p_disputa: d.data.id })
@@ -58,7 +54,6 @@ export default function DisputaPage() {
         const leads = Number(x.leads), comp = Number(x.comparecimentos)
         return { participante: x.participante, unidade: x.unidade, pontos: comp, desempate: comp / (leads || 1), detalhe: `${leads} leads`, taxa: `${fmtPct(comp / (leads || 1), 1)} compareceram` }
       }))
-      setSemCadastro([])
     } else {
       const r = await supabase.rpc('ranking_vendas_aplicadoras', { p_disputa: d.data.id })
       if (r.error) { setErro(r.error.message); return }
@@ -67,7 +62,6 @@ export default function DisputaPage() {
         const qtd = Number(x.vendas), canc = Number(x.cancelado), total = Number(x.valor) - canc
         return { participante: x.participante, unidade: x.unidade, pontos: total, desempate: qtd, detalhe: `${qtd} ${qtd === 1 ? 'venda' : 'vendas'}`, taxa: canc ? `${fmtBRL(canc)} cancelado` : `ticket ${brl0.format(qtd ? total / qtd : 0)}` }
       }))
-      setSemCadastro(dados.filter((x) => !x.funcao).map((x) => ({ usuario: x.participante, unidade: x.unidade, valor: Number(x.valor) - Number(x.cancelado) })).sort((a, b) => b.valor - a.valor))
     }
     setErro(null)
     setAtualizado(new Date())
@@ -222,24 +216,6 @@ export default function DisputaPage() {
               : 'Empate: vence quem tiver a maior taxa de comparecimento (comparecimentos ÷ leads captados). Lead e avaliação são ligados pelo telefone do cliente; leads com telefone oculto no ELOS não pontuam.'}
           </p>
         </>
-      )}
-
-      {/* só administradores: quem vendeu e não está na Equipe (para completar o de/para) */}
-      {admin && vendas && semCadastro.length > 0 && (
-        <div className="card mt-6 border-amber-200 bg-amber-50/60 p-5">
-          <div className="text-sm font-semibold text-amber-900">Vendedores sem cadastro na Equipe ({semCadastro.length}) — só administradores veem</div>
-          <p className="mt-1 text-xs text-amber-800">
-            Se algum destes usuários é de uma aplicadora, vincule-o a ela em <Link to="/cadastros" className="font-medium underline">Cadastros → Equipe</Link> (função Aplicadora; deixe "No painel" desmarcado para não aparecer no painel do funil).
-          </p>
-          <ul className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2 xl:grid-cols-3">
-            {semCadastro.map((s) => (
-              <li key={s.usuario + s.unidade} className="flex justify-between gap-3 border-b border-amber-100 py-1">
-                <span className="truncate">{s.usuario} <span className="text-xs text-amber-700">· {s.unidade}</span></span>
-                <span className="tabular-nums text-slate-700">{brl0.format(s.valor)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
     </div>
   )
