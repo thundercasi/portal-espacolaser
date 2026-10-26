@@ -4,17 +4,19 @@ import { criarContaDeLogin, supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import type { Unidade } from '../lib/types'
 import Equipe from '../components/Equipe'
+import TransferirVendas from '../components/TransferirVendas'
 import { ErrorBox, PageHeader } from '../components/ui'
 
 export default function Cadastros() {
   const [erro, setErro] = useState<string | null>(null)
   return (
     <div>
-      <PageHeader title="Cadastros" subtitle="Unidades, equipe (com de/para de usuários) e acessos" />
+      <PageHeader title="Cadastros" subtitle="Unidades, equipe (com de/para de usuários), transferência de vendas e acessos" />
       <ErrorBox msg={erro} />
       <div className="space-y-6">
         <Unidades setErro={setErro} />
         <Equipe setErro={setErro} />
+        <TransferirVendas setErro={setErro} />
         <Usuarios setErro={setErro} />
       </div>
     </div>

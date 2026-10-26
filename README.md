@@ -12,7 +12,7 @@ Painel do funil comercial das unidades (Paulista, Medon, Tivoli), substituindo a
 | **Metas** | Por unidade e mês: meta de leads, agendamentos, taxas de comparecimento e conversão, ticket médio, share, meta de faturamento, super meta e calendário de dias úteis. |
 | **Premiações** | Cálculo mensal dos prêmios (planilha "Cálculo Premiações - Padrão"): status Meta/Super por unidade e da rede (gerente), prêmios por faixa de vendas, agendamentos e captações (consultoras), tabela das aplicadoras, % para subgerente e gerente, funcionário do mês, garantido de R$ 300 para consultora sem prêmio (pode ser retirado) e valores fixos de exceção. Regras editáveis na aba Regras. Exporta CSV. |
 | **Cancelamento** | Calculadora de cancelamento (planilha "Cálculo Cancelamento"): vários contratos por cliente, cada um com parcelas, parcelas pagas, sessões para cálculo e multa próprios; áreas com valor e sessões feitas. Mostra total pago, saldo utilizado, multa e saldo devido (ou valor a devolver) e copia um resumo em texto. O último cálculo fica salvo no navegador. |
-| **Cadastros** | Unidades (nome do estabelecimento como na exportação), **Equipe** (pessoa, função, unidade ou rede, valor fixo e o de/para dos usuários do sistema que ela usa — vale para o painel e para as premiações; lista os usuários sem vínculo) e e-mails com acesso, cada um com perfil **Administrador** (tudo) ou **Consulta** (só o Painel). |
+| **Cadastros** | Unidades (nome do estabelecimento como na exportação), **Equipe** (pessoa, função, unidade ou rede, valor fixo e o de/para dos usuários do sistema que ela usa — vale para o painel e para as premiações; lista os usuários sem vínculo), **Transferência de vendas** (venda lançada no login de outra pessoa passa a contar para quem vendeu) e e-mails com acesso, cada um com perfil **Administrador** (tudo) ou **Consulta** (só o Painel). |
 
 ## Instalação
 
@@ -60,6 +60,8 @@ O mês é dividido em 3 dezenas: 1–10, 11–20 e 21–fim (em meses de 31 dias
 ## De/para de usuários
 
 Configurado em Cadastros → Equipe (fica guardado no sistema). Para cada registro (lead, agendamento, venda), a pessoa é escolhida pela unidade e pela data: 1) vínculo com período que cobre a data (o de período mais curto, se houver mais de um); 2) vínculo permanente; 3) pessoa com o mesmo nome do usuário. O relatório de vendas por vendedor com "Data de Pagamento" é atribuído por dia; sem essa coluna, vale o vínculo do último dia do mês. Reimportar vendas por vendedor substitui o mesmo período e unidade.
+
+**Transferência de vendas** (Cadastros): venda a venda, quando alguém lança no login de outra pessoa. Fica guardada pela linha da exportação (ID Orç. + vendedor), sobrevive à reimportação e vale antes do de/para: nas premiações o valor sai de quem lançou e vai para a pessoa escolhida (da mesma unidade); na disputa das aplicadoras a venda conta para ela.
 
 ## Meta × Super meta no Painel
 

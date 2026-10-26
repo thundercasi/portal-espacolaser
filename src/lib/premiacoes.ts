@@ -22,6 +22,8 @@ export const ajustePadrao: Ajuste = { bateu_meta: false, func_mes: 0, sem_garant
 
 /** dia = Data de Pagamento; relatório sem data: 1º dia do mês e sem_data = true */
 export interface VendaVendedor { estabelecimento: string; vendedor: string; valor_liquido: number; dia: string; sem_data: boolean }
+/** venda lançada no login de outra pessoa, transferida para quem vendeu (Cadastros → Transferência de vendas) */
+export interface VendaTransferida { estabelecimento: string; vendedor: string; data_pagamento: string; valor_liquido: number; colaborador_id: string }
 export interface Cancelamento { estabelecimento: string; data_cancelamento: string; data_venda: string | null; valor_cancelado: number }
 /** contagem por estabelecimento + usuário (leads = captações; agendamentos = criados no mês) */
 export interface Contagem { estabelecimento: string; usuario: string; data: string; leads: number; agendamentos: number }
@@ -82,10 +84,11 @@ export function calcularPremiacoes(args: {
   status: Map<string, Status> // chave: unidade_id ou 'rede'
   ajustes: Map<string, Ajuste> // chave: colaborador_id
   vendas: VendaVendedor[]
+  transferencias?: VendaTransferida[]
   cancelamentos: Cancelamento[]
   contagens: Contagem[]
 }): { blocos: BlocoUnidade[]; total: number } {
-  const { unidades, colaboradores, usuarios, regras, status, ajustes, vendas, cancelamentos, contagens } = args
+  const { unidades, colaboradores, usuarios, regras, status, ajustes, vendas, cancelamentos, contagens, transferencias = [] } = args
   const ativos = colaboradores.filter((c) => c.ativo)
 
   // de/para pela unidade e pela data do registro (ver src/lib/depara.ts)
@@ -162,6 +165,15 @@ export function calcularPremiacoes(args: {
       }
     }
     for (const x of vendasU) somar(x.vendedor, x.sem_data ? ultimoDiaDoMes(x.dia) : x.dia, Number(x.valor_liquido), 0, 0)
+    // transferidas: sai de quem lançou e vai para quem vendeu (só para pessoa ativa da própria unidade)
+    for (const t of transferencias) {
+      if (normalizar(t.estabelecimento) !== est || !ativos.some((c) => c.id === t.colaborador_id && c.unidade_id === u.id)) continue
+      const v = Number(t.valor_liquido)
+      somar(t.vendedor, t.data_pagamento, -v, 0, 0)
+      const d = porPessoa.get(t.colaborador_id) ?? { v: 0, l: 0, a: 0 }
+      d.v += v
+      porPessoa.set(t.colaborador_id, d)
+    }
     for (const x of contagens.filter((x) => normalizar(x.estabelecimento) === est)) somar(x.usuario, x.data, 0, Number(x.leads), Number(x.agendamentos))
 
     const daUnidade = ativos.filter((c) => c.unidade_id === u.id).sort((a, b) => a.ordem - b.ordem)

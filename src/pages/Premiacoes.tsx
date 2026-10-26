@@ -6,7 +6,7 @@ import { useApp } from '../lib/AppContext'
 import { addMeses, fimMes, fmtBRL, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import {
   ajustePadrao, calcularPremiacoes, STATUS,
-  type Ajuste, type BlocoUnidade, type Cancelamento, type Contagem, type Regras, type Status, type VendaVendedor,
+  type Ajuste, type BlocoUnidade, type Cancelamento, type Contagem, type Regras, type Status, type VendaTransferida, type VendaVendedor,
 } from '../lib/premiacoes'
 import { ORIGENS_AVALIACAO } from '../lib/painel'
 import type { LinhaPainel, Meta } from '../lib/types'
@@ -53,21 +53,22 @@ export default function Premiacoes() {
 function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErro: (s: string | null) => void }) {
   const { unidades, colaboradores, usuarios } = useApp()
   const [dados, setDados] = useState<{
-    vendas: VendaVendedor[]; cancelamentos: Cancelamento[]; contagens: Contagem[]; metas: Meta[]
+    vendas: VendaVendedor[]; transferencias: VendaTransferida[]; cancelamentos: Cancelamento[]; contagens: Contagem[]; metas: Meta[]
     status: Map<string, Status>; ajustes: Map<string, Ajuste>
   } | null>(null)
 
   const carregar = useCallback(async () => {
     const ini = inicioMes(mes), fim = fimMes(mes)
-    const [v, c, p, m, s, a] = await Promise.all([
+    const [v, c, p, m, s, a, t] = await Promise.all([
       supabase.from('vendas_vendedor').select('estabelecimento, vendedor, valor_liquido, dia, sem_data').eq('mes', ini),
       supabase.from('cancelamentos').select('estabelecimento, data_cancelamento, data_venda, valor_cancelado').gte('data_cancelamento', ini).lte('data_cancelamento', fim),
       supabase.rpc('painel_diario', { p_ini: ini, p_fim: fim, p_origens_av: ORIGENS_AVALIACAO }),
       supabase.from('metas').select('*').eq('mes', ini),
       supabase.from('premiacao_status').select('unidade_id, status').eq('mes', ini),
       supabase.from('premiacao_ajustes').select('*').eq('mes', ini),
+      supabase.rpc('vendas_transferidas_periodo', { p_ini: ini, p_fim: fim }),
     ])
-    const err = [v, c, p, m, s, a].find((r) => r.error)?.error
+    const err = [v, c, p, m, s, a, t].find((r) => r.error)?.error
     setErro(err ? err.message : null)
     // leads e agendamentos criados no mês, por estabelecimento + usuário + dia (o de/para depende da data)
     const cont = new Map<string, Contagem>()
@@ -81,6 +82,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
     }
     setDados({
       vendas: (v.data ?? []) as VendaVendedor[],
+      transferencias: (t.data ?? []) as VendaTransferida[],
       cancelamentos: (c.data ?? []) as Cancelamento[],
       contagens: [...cont.values()],
       metas: (m.data ?? []) as Meta[],
@@ -94,7 +96,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
   const ativas = useMemo(() => unidades.filter((u) => u.ativo), [unidades])
   const r = useMemo(() => dados && calcularPremiacoes({
     unidades: ativas, colaboradores, usuarios, regras, status: dados.status, ajustes: dados.ajustes,
-    vendas: dados.vendas, cancelamentos: dados.cancelamentos, contagens: dados.contagens,
+    vendas: dados.vendas, transferencias: dados.transferencias, cancelamentos: dados.cancelamentos, contagens: dados.contagens,
   }), [dados, ativas, colaboradores, usuarios, regras])
 
   async function salvarStatus(unidadeId: string | null, status: Status) {
