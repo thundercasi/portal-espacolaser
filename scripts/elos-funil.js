@@ -104,19 +104,22 @@ window.CF = {
     const iniMes = new Date(hoje.getFullYear(), hoje.getMonth() - (hoje.getDate() <= 3 ? 1 : 0), 1)
     const ini = opcoes.ini || CF.data(iniMes)
     const fim = opcoes.fim || CF.data(hoje)
+    // leads e agendamentos: desde o 1º dia do mês anterior — mantém atualizado o status das avaliações
+    // marcadas no mês anterior (ex.: lead de outubro que compareceu em novembro)
+    const ini2 = opcoes.ini || CF.data(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1))
     await CF.garantirUnidade()
     await CF.abrirRelatorios()
     const abas = []
-    const resumo = { periodo: `${ini} a ${fim}` }
+    const resumo = { periodo: `${ini} a ${fim}`, periodoLeadsAgend: `${ini2} a ${fim}` }
 
     // ---------------- Leads ----------------
     {
       const f = CF.frame(/Cliente > Leads/)
-      CF.periodo(f, CF.dataInput(f), ini, fim)
+      CF.periodo(f, CF.dataInput(f), ini2, fim)
       const rows = await CF.ler(f)
       abas.push({ nome: 'Leads', linhas: [
-        ['Data Cadastro', 'Id Lead', 'Estabelecimento', 'Atendente', 'Mídia', 'Status', 'Motivo do Descarte', 'É indicação?'],
-        ...rows.map((r) => [CF.dataHora(r.CreationDate), r.IdLead, r.Establishment, r.atendente ?? '', r.midia ?? '', r.Status ?? '', r.DiscardReason ?? '', r.IsIndication ? 'Sim' : 'Não']),
+        ['Data Cadastro', 'Id Lead', 'Estabelecimento', 'Atendente', 'Mídia', 'Status', 'Motivo do Descarte', 'É indicação?', 'Telefone'],
+        ...rows.map((r) => [CF.dataHora(r.CreationDate), r.IdLead, r.Establishment, r.atendente ?? '', r.midia ?? '', r.Status ?? '', r.DiscardReason ?? '', r.IsIndication ? 'Sim' : 'Não', r.PhoneNumber ?? '']),
       ] })
       resumo.leads = rows.length
     }
@@ -131,8 +134,8 @@ window.CF = {
       CF.detalhe(f, ['Establishment', 'Date', 'Status', 'CreateUser', 'SchedulerDate', 'Client'])
       $('#cboStatus').val([]).trigger('change')
       $(f.document.getElementById('ddlServiceItem')).select2('data', { id: CF.ITEM_AVALIACAO, text: 'AVALIAÇÃO' }).trigger('change')
-      CF.periodo(f, prog, ini, CF.data(new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0)))
-      CF.periodo(f, cria, ini, fim)
+      CF.periodo(f, prog, ini2, CF.data(new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0)))
+      CF.periodo(f, cria, ini2, fim)
       const rows = await CF.ler(f)
       abas.push({ nome: 'Agendamentos', linhas: [
         ['Estabelecimento', 'Data Agendada', 'Data de Criação', 'Cliente', 'Telefone', 'Usuário de Criação', 'Origem Cliente', 'Status', 'Quantidade'],

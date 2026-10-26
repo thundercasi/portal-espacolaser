@@ -7,14 +7,15 @@ export type Tipo = 'leads' | 'agendamentos' | 'vendas' | 'vendas_vendedor' | 'ca
 type Celula = string | number | boolean | Date | null | undefined
 type Linhas = Celula[][]
 
+/** tel_hash: hash do telefone do cliente (liga lead e avaliação sem guardar o número) */
 export interface LeadRow {
   id_lead: number; data_cadastro: string; estabelecimento: string; atendente: string | null
-  midia: string | null; status: string | null; motivo_descarte: string | null; indicacao: boolean | null
+  midia: string | null; status: string | null; motivo_descarte: string | null; indicacao: boolean | null; tel_hash: string | null
 }
 /** quantidade > 1 quando o relatório vem agrupado (exportado sem o detalhe "Cliente") */
 export interface AgendamentoRow {
   chave: string; estabelecimento: string; data_agendada: string; data_criacao: string
-  usuario_criacao: string | null; origem_cliente: string | null; status: string | null; quantidade: number
+  usuario_criacao: string | null; origem_cliente: string | null; status: string | null; quantidade: number; tel_hash: string | null
 }
 /** vendedor = '' quando o relatório não tem a coluna; um orçamento dividido entre vendedores vem em várias linhas */
 export interface VendaRow {
@@ -43,7 +44,7 @@ export type Lote =
 const COLUNAS: Record<Tipo, Record<string, string>> = {
   leads: {
     id: 'id lead', data: 'data cadastro', estab: 'estabelecimento', atendente: 'atendente',
-    midia: 'midia', status: 'status', motivo: 'motivo do descarte', indicacao: 'e indicacao',
+    midia: 'midia', status: 'status', motivo: 'motivo do descarte', indicacao: 'e indicacao', telefone: 'telefone',
   },
   agendamentos: {
     estab: 'estabelecimento', agendada: 'data agendada', criacao: 'data de criacao', cliente: 'cliente',
@@ -134,6 +135,16 @@ const paraInt = (v: Celula) => {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null
 }
 
+/**
+ * Hash do telefone: só dígitos, últimos 11 (DDD + número, sem o 55). Telefones mascarados
+ * ("*****") ou curtos não geram hash. O número em si nunca é gravado.
+ */
+export async function telHash(v: unknown): Promise<string | null> {
+  const dig = String(v ?? '').replace(/\D/g, '')
+  if (dig.length < 10) return null
+  return sha256('tel|' + dig.slice(-11))
+}
+
 async function sha256(s: string) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('')
@@ -197,7 +208,7 @@ export async function lerLinhas(linhas: Linhas, origem: string): Promise<Lote | 
       mapa.set(id, {
         id_lead: id, data_cadastro: data, estabelecimento: estab, atendente: txt(c(row, 'atendente')),
         midia: txt(c(row, 'midia')), status: txt(c(row, 'status')), motivo_descarte: txt(c(row, 'motivo')),
-        indicacao: paraBool(c(row, 'indicacao')),
+        indicacao: paraBool(c(row, 'indicacao')), tel_hash: await telHash(c(row, 'telefone')),
       })
     }
     const out = [...mapa.values()]
@@ -223,6 +234,7 @@ export async function lerLinhas(linhas: Linhas, origem: string): Promise<Lote | 
       mapa.set(chave, {
         chave, estabelecimento: estab, data_agendada: agendada, data_criacao: criacao,
         usuario_criacao: usuario, origem_cliente: txt(c(row, 'origem')), status, quantidade: qtd,
+        tel_hash: porCliente ? await telHash(c(row, 'telefone')) : null,
       })
     }
     const out = [...mapa.values()]

@@ -1,6 +1,6 @@
 import { Suspense, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator, Trophy, KeyRound } from 'lucide-react'
+import { BarChart3, Upload, Target, Users, LogOut, Menu, Filter, Calculator, Trophy, KeyRound, Crown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import AlterarSenha from './AlterarSenha'
@@ -10,6 +10,7 @@ const NAV = [
     titulo: 'Funil',
     itens: [
       { to: '/', label: 'Painel', icon: BarChart3, end: true, consulta: true },
+      { to: '/disputa', label: 'Disputa', icon: Crown, consulta: true },
       { to: '/importar', label: 'Importar', icon: Upload },
       { to: '/metas', label: 'Metas', icon: Target },
     ],

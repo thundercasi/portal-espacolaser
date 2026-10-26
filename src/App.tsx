@@ -11,6 +11,7 @@ const Metas = lazy(() => import('./pages/Metas'))
 const Cadastros = lazy(() => import('./pages/Cadastros'))
 const Cancelamento = lazy(() => import('./pages/Cancelamento'))
 const Premiacoes = lazy(() => import('./pages/Premiacoes'))
+const Disputa = lazy(() => import('./pages/Disputa'))
 
 function SemAcesso() {
   const { session } = useApp()
@@ -34,6 +35,7 @@ function Rotas() {
   if (!admin) return (
     <Routes>
       <Route element={<Layout />}>
+        <Route path="disputa" element={<Disputa />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>
@@ -47,6 +49,7 @@ function Rotas() {
         <Route path="cadastros" element={<Cadastros />} />
         <Route path="cancelamento" element={<Cancelamento />} />
         <Route path="premiacoes" element={<Premiacoes />} />
+        <Route path="disputa" element={<Disputa />} />
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>
