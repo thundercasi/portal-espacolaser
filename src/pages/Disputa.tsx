@@ -218,7 +218,7 @@ export default function DisputaPage() {
           </div>
           <p className="mt-3 text-xs text-slate-500">
             {vendas
-              ? 'Empate: vence quem tiver mais vendas. Venda cancelada no próprio mês já sai do relatório de vendas do ELOS; cancelamento feito depois do fechamento do mês é abatido aqui.'
+              ? 'Empate: vence quem tiver mais vendas. Valor líquido do relatório de vendas do ELOS: venda cancelada no próprio mês sai do relatório; cancelamento posterior entra negativo na data do cancelamento.'
               : 'Empate: vence quem tiver a maior taxa de comparecimento. Lead e avaliação são ligados pelo telefone do cliente; leads com telefone oculto no ELOS não pontuam.'}
           </p>
         </>
