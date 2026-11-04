@@ -44,6 +44,8 @@ export interface LinhaPremio {
   fixo: number        // valor fixo mensal (exceções)
   total: number
   ajuste: Ajuste
+  vendasPorUnidade?: { unidade: string; valor: number }[] // só quando vendeu fora da unidade do cadastro
+  unidadeCadastro?: string | null                       // quando aparece em outra unidade (onde mais vendeu)
 }
 
 export interface BlocoUnidade {
@@ -137,26 +139,33 @@ export function calcularPremiacoes(args: {
     }
   }
 
-  const blocos: BlocoUnidade[] = []
-  for (const u of unidades) {
+  // vendas de cada pessoa por unidade: quem vende em outra loja continua sendo a mesma pessoa
+  // (usuário sem vínculo na loja da venda → vínculo dele nas outras unidades)
+  const pessoaDaVenda = (unidadeId: string, usuario: string, data: string) =>
+    pessoa(unidadeId, usuario, data) ?? unidades.filter((o) => o.id !== unidadeId).map((o) => pessoa(o.id, usuario, data)).find(Boolean) ?? null
+  const porPessoa = new Map<string, { porUnidade: Map<string, number>; l: number; a: number }>()
+  const daPessoa = (id: string) => {
+    let t = porPessoa.get(id)
+    if (!t) porPessoa.set(id, (t = { porUnidade: new Map(), l: 0, a: 0 }))
+    return t
+  }
+
+  const resumos = unidades.map((u) => {
     const est = normalizar(u.estabelecimento)
-    const st = status.get(u.id) ?? 'Nenhum'
     const vendasU = vendas.filter((x) => normalizar(x.estabelecimento) === est)
     const cancU = cancelamentos.filter((x) => normalizar(x.estabelecimento) === est)
     const totalVendas = vendasU.reduce((s, x) => s + Number(x.valor_liquido), 0)
     const canc = cancU.filter(cancelamentoConta).reduce((s, x) => s + Number(x.valor_cancelado), 0)
     const ignorados = cancU.filter((x) => !cancelamentoConta(x)).reduce((s, x) => s + Number(x.valor_cancelado), 0)
-    const liquido = totalVendas - canc
 
     // soma vendas, leads e agendamentos por pessoa; o que não tem dono vai para "sem vínculo"
-    const porPessoa = new Map<string, { v: number; l: number; a: number }>()
     const sem = new Map<string, { usuario: string; vendas: number; leads: number; agendamentos: number }>()
     const somar = (usuario: string, data: string, v: number, l: number, a: number) => {
-      const p = pessoa(u.id, usuario, data)
+      const p = v ? pessoaDaVenda(u.id, usuario, data) : pessoa(u.id, usuario, data)
       if (p) {
-        const t = porPessoa.get(p.id) ?? { v: 0, l: 0, a: 0 }
-        t.v += v; t.l += l; t.a += a
-        porPessoa.set(p.id, t)
+        const t = daPessoa(p.id)
+        if (v) t.porUnidade.set(u.id, (t.porUnidade.get(u.id) ?? 0) + v)
+        t.l += l; t.a += a
       } else {
         const k = normalizar(usuario)
         const t = sem.get(k) ?? { usuario, vendas: 0, leads: 0, agendamentos: 0 }
@@ -165,21 +174,41 @@ export function calcularPremiacoes(args: {
       }
     }
     for (const x of vendasU) somar(x.vendedor, x.sem_data ? ultimoDiaDoMes(x.dia) : x.dia, Number(x.valor_liquido), 0, 0)
-    // transferidas: sai de quem lançou e vai para quem vendeu (só para pessoa ativa da própria unidade)
+    // transferidas: sai de quem lançou e vai para quem vendeu
     for (const t of transferencias) {
-      if (normalizar(t.estabelecimento) !== est || !ativos.some((c) => c.id === t.colaborador_id && c.unidade_id === u.id)) continue
+      if (normalizar(t.estabelecimento) !== est || !ativos.some((c) => c.id === t.colaborador_id && c.unidade_id)) continue
       const v = Number(t.valor_liquido)
       somar(t.vendedor, t.data_pagamento, -v, 0, 0)
-      const d = porPessoa.get(t.colaborador_id) ?? { v: 0, l: 0, a: 0 }
-      d.v += v
-      porPessoa.set(t.colaborador_id, d)
+      const d = daPessoa(t.colaborador_id)
+      d.porUnidade.set(u.id, (d.porUnidade.get(u.id) ?? 0) + v)
     }
     for (const x of contagens.filter((x) => normalizar(x.estabelecimento) === est)) somar(x.usuario, x.data, 0, Number(x.leads), Number(x.agendamentos))
+    return { u, totalVendas, canc, ignorados, liquido: totalVendas - canc, sem }
+  })
 
-    const daUnidade = ativos.filter((c) => c.unidade_id === u.id).sort((a, b) => a.ordem - b.ordem)
+  // consultora/aplicadora entra na unidade em que mais vendeu no mês (empate ou sem vendas: a do cadastro)
+  const nomeUnidade = new Map(unidades.map((u) => [u.id, u.nome]))
+  const unidadeDaLinha = (c: Colaborador) => {
+    if (c.funcao !== 'Consultora' && c.funcao !== 'Aplicadora') return c.unidade_id
+    let melhor = c.unidade_id, max = porPessoa.get(c.id)?.porUnidade.get(c.unidade_id ?? '') ?? 0
+    for (const [id, v] of porPessoa.get(c.id)?.porUnidade ?? []) if (v > max) { melhor = id; max = v }
+    return melhor
+  }
+
+  const blocos: BlocoUnidade[] = []
+  for (const { u, totalVendas, canc, ignorados, liquido, sem } of resumos) {
+    const st = status.get(u.id) ?? 'Nenhum'
+    const daUnidade = ativos.filter((c) => c.unidade_id && unidadeDaLinha(c) === u.id)
+      .sort((a, b) => Number(a.unidade_id !== u.id) - Number(b.unidade_id !== u.id) || a.ordem - b.ordem)
     const linhas = daUnidade.map((c) => {
-      const t = porPessoa.get(c.id) ?? { v: 0, l: 0, a: 0 }
-      return montarLinha(c, st, liquido, t.v, t.a, t.l)
+      const t = porPessoa.get(c.id) ?? { porUnidade: new Map<string, number>(), l: 0, a: 0 }
+      const v = [...t.porUnidade.values()].reduce((s, x) => s + x, 0)
+      const linha = montarLinha(c, st, liquido, v, t.a, t.l)
+      const fora = [...t.porUnidade].some(([id, x]) => id !== c.unidade_id && x)
+      if (fora) linha.vendasPorUnidade = [...t.porUnidade].filter(([, x]) => x).map(([id, x]) => ({ unidade: nomeUnidade.get(id) ?? '?', valor: x }))
+        .sort((a, b) => b.valor - a.valor)
+      if (c.unidade_id !== u.id) linha.unidadeCadastro = nomeUnidade.get(c.unidade_id ?? '') ?? null
+      return linha
     })
     blocos.push({
       unidade: u, status: st, vendas: totalVendas, cancelamentos: canc, cancelamentosIgnorados: ignorados, liquido, linhas,

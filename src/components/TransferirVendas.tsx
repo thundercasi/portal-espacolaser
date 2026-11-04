@@ -23,7 +23,10 @@ export default function TransferirVendas({ setErro }: { setErro: (s: string | nu
   const [vendas, setVendas] = useState<Venda[] | null>(null)
   const [transf, setTransf] = useState<Map<string, string>>(new Map()) // chave da venda → colaborador_id
   const unidade = unidades.find((u) => u.id === sel) ?? unidades[0]
-  const pessoas = colaboradores.filter((c) => c.ativo && c.unidade_id === unidade?.id).sort((a, b) => a.nome.localeCompare(b.nome))
+  // primeiro a equipe da unidade da venda; depois quem é de outra unidade (vendeu aqui no login de alguém)
+  const nomeUnidade = new Map(unidades.map((u) => [u.id, u.nome]))
+  const pessoas = colaboradores.filter((c) => c.ativo && c.unidade_id)
+    .sort((a, b) => Number(a.unidade_id !== unidade?.id) - Number(b.unidade_id !== unidade?.id) || a.nome.localeCompare(b.nome))
   const quemEra = useMemo(() => criarResolvedor(colaboradores, usuarios), [colaboradores, usuarios])
 
   const carregar = useCallback(async () => {
@@ -116,7 +119,7 @@ export default function TransferirVendas({ setErro }: { setErro: (s: string | nu
                         <select className="input min-w-48" value={destino} onChange={(e) => transferir(v, e.target.value)}
                           title={destino ? `Transferida para ${nomeDe(destino)}` : 'Conta para quem lançou'}>
                           <option value="">{dono ? `${dono.nome} (quem lançou)` : 'Quem lançou'}</option>
-                          {pessoas.filter((p) => p.id !== dono?.id).map((p) => <option key={p.id} value={p.id}>{p.nome} · {p.funcao}</option>)}
+                          {pessoas.filter((p) => p.id !== dono?.id).map((p) => <option key={p.id} value={p.id}>{p.nome} · {p.funcao}{p.unidade_id !== unidade?.id ? ` · ${nomeUnidade.get(p.unidade_id ?? '')}` : ''}</option>)}
                         </select>
                       </div>
                     </td>

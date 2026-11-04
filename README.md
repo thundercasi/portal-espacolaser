@@ -46,6 +46,7 @@ Diferenças em relação à planilha:
 - **Faixa** = vendas líquidas da pessoa ÷ 10.000. Acima da última faixa da tabela, paga a última faixa (a planilha zerava).
 - **Agendamentos** = criados no mês pelo usuário (Usuário de Criação); **captações** = leads cadastrados no mês pelo usuário.
 - O prêmio só é pago se **Bateu meta** estiver marcado. Funcionário do mês só conta no status Super.
+- **Venda em outra unidade** soma para a pessoa: usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades. Consultora e aplicadora aparecem no bloco da unidade em que mais venderam no mês (e usam o status dela), com o quanto vendeu em cada unidade abaixo do valor. O líquido de cada unidade continua sendo o da própria loja.
 - A **gerente** fica na Equipe como Rede (sem unidade) e ganha % sobre o líquido das unidades, com o status da Rede.
 
 ## Perfis de acesso
@@ -61,7 +62,7 @@ O mês é dividido em 3 dezenas: 1–10, 11–20 e 21–fim (em meses de 31 dias
 
 Configurado em Cadastros → Equipe (fica guardado no sistema). Para cada registro (lead, agendamento, venda), a pessoa é escolhida pela unidade e pela data: 1) vínculo com período que cobre a data (o de período mais curto, se houver mais de um); 2) vínculo permanente; 3) pessoa com o mesmo nome do usuário. O relatório de vendas por vendedor com "Data de Pagamento" é atribuído por dia; sem essa coluna, vale o vínculo do último dia do mês. Reimportar vendas por vendedor substitui o mesmo período e unidade.
 
-**Transferência de vendas** (Cadastros): venda a venda, quando alguém lança no login de outra pessoa. Fica guardada pela linha da exportação (ID Orç. + vendedor), sobrevive à reimportação e vale antes do de/para: nas premiações o valor sai de quem lançou e vai para a pessoa escolhida (da mesma unidade); na disputa das aplicadoras a venda conta para ela.
+**Transferência de vendas** (Cadastros): venda a venda, quando alguém lança no login de outra pessoa. Fica guardada pela linha da exportação (ID Orç. + vendedor), sobrevive à reimportação e vale antes do de/para: nas premiações o valor sai de quem lançou e vai para a pessoa escolhida (de qualquer unidade); na disputa das aplicadoras a venda conta para ela.
 
 ## Meta × Super meta no Painel
 

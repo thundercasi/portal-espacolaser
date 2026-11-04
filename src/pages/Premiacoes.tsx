@@ -121,10 +121,11 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
 
   function exportarCSV() {
     if (!r) return
-    const cab = ['Unidade', 'Nome', 'Função', 'Vendas', 'Faixa', 'Agendamentos', 'Captações', 'Bateu meta', 'Prêmio agend.', 'Prêmio capt.', 'Prêmio vendas', 'Func. mês', 'Garantido', 'Fixo', 'Total']
+    const cab = ['Unidade', 'Nome', 'Função', 'Vendas', 'Vendas por unidade', 'Faixa', 'Agendamentos', 'Captações', 'Bateu meta', 'Prêmio agend.', 'Prêmio capt.', 'Prêmio vendas', 'Func. mês', 'Garantido', 'Fixo', 'Total']
     const num = (n: number) => n.toFixed(2).replace('.', ',')
     const linhas = r.blocos.flatMap((b) => b.linhas.map((l) => [
-      b.unidade?.nome ?? 'Rede', l.colaborador.nome, l.colaborador.funcao, num(l.vendas), l.faixa, l.agendamentos, l.captacoes,
+      b.unidade?.nome ?? 'Rede', l.colaborador.nome, l.colaborador.funcao, num(l.vendas),
+      (l.vendasPorUnidade ?? []).map((x) => `${x.unidade} ${num(x.valor)}`).join(' | '), l.faixa, l.agendamentos, l.captacoes,
       l.ajuste.bateu_meta ? 'S' : 'N', num(l.premioAgendamentos), num(l.premioCaptacoes), num(l.premioVendas), num(l.funcMes),
       num(l.garantido), num(l.fixo), num(l.total),
     ]))
@@ -169,6 +170,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li><b>Status</b> da unidade (Nenhum, Meta ou Super) é escolhido à mão; a Rede tem status próprio para a gerente.</li>
           <li><b>Vendas líquidas da unidade</b> = vendas do relatório por vendedor − cancelamentos do mês. Cancelamentos de vendas feitas há mais de 1 ano são ignorados.</li>
+          <li><b>Vendas em outra unidade</b> somam para a pessoa (usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades). Consultora e aplicadora aparecem na unidade em que mais venderam no mês e usam o status dela; abaixo do valor fica quanto vendeu em cada unidade. O líquido de cada unidade continua sendo o da própria loja.</li>
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
           <li><b>Consultora</b>: prêmio de vendas pela faixa; + prêmio de agendamentos se tiver ≥ {regras.limiteAgendamentos}; + prêmio de captações (leads) se tiver ≥ {regras.limiteCaptacoes}.</li>
           <li><b>Aplicadora</b>: prêmio de vendas pela tabela das esteticistas.</li>
@@ -237,9 +239,17 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
               const usaMetas = c.funcao !== 'Outro'
               return (
                 <tr key={c.id}>
-                  <td className="td text-left font-medium">{c.nome}</td>
+                  <td className="td text-left font-medium">
+                    {c.nome}
+                    {l.unidadeCadastro && <div className="text-[11px] font-normal text-slate-500">cadastro: {l.unidadeCadastro} · aqui por ter vendido mais nesta unidade</div>}
+                  </td>
                   <td className="td text-left text-slate-500">{c.funcao}</td>
-                  <td className="td">{b.unidade ? brl0(l.vendas) : '—'}</td>
+                  <td className="td">
+                    {b.unidade ? brl0(l.vendas) : '—'}
+                    {l.vendasPorUnidade && (
+                      <div className="whitespace-nowrap text-[11px] text-slate-500">{l.vendasPorUnidade.map((x) => `${x.unidade} ${brl0(x.valor)}`).join(' · ')}</div>
+                    )}
+                  </td>
                   <td className="td" title={l.faixaAcimaDaTabela ? 'Acima da última faixa da tabela: paga a última faixa' : undefined}>
                     {b.unidade ? <>{l.faixa}{l.faixaAcimaDaTabela && <span className="text-amber-600">↑</span>}</> : '—'}
                   </td>
