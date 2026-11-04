@@ -186,28 +186,43 @@ export function calcularPremiacoes(args: {
     return { u, totalVendas, canc, ignorados, liquido: totalVendas - canc, sem }
   })
 
-  // consultora/aplicadora entra na unidade em que mais vendeu no mês (empate ou sem vendas: a do cadastro)
+  // consultora/aplicadora: cadastros com o mesmo nome em unidades diferentes são a mesma pessoa.
+  // Soma tudo e ela entra na unidade em que mais vendeu no mês (empate ou sem vendas: a do primeiro cadastro)
   const nomeUnidade = new Map(unidades.map((u) => [u.id, u.nome]))
-  const unidadeDaLinha = (c: Colaborador) => {
-    if (c.funcao !== 'Consultora' && c.funcao !== 'Aplicadora') return c.unidade_id
-    let melhor = c.unidade_id, max = porPessoa.get(c.id)?.porUnidade.get(c.unidade_id ?? '') ?? 0
-    for (const [id, v] of porPessoa.get(c.id)?.porUnidade ?? []) if (v > max) { melhor = id; max = v }
-    return melhor
+  const grupos = new Map<string, Colaborador[]>()
+  for (const c of ativos.filter((c) => c.unidade_id).sort((a, b) => a.ordem - b.ordem)) {
+    const k = c.funcao === 'Consultora' || c.funcao === 'Aplicadora' ? `n:${normalizar(c.nome)}` : `id:${c.id}`
+    grupos.set(k, [...(grupos.get(k) ?? []), c])
+  }
+  const porUnidadeDaLinha = new Map<string, { c: Colaborador; t: { porUnidade: Map<string, number>; l: number; a: number }; cadastros: Colaborador[] }[]>()
+  for (const membros of grupos.values()) {
+    const t = { porUnidade: new Map<string, number>(), l: 0, a: 0 }
+    for (const m of membros) {
+      const x = porPessoa.get(m.id)
+      if (!x) continue
+      for (const [id, v] of x.porUnidade) t.porUnidade.set(id, (t.porUnidade.get(id) ?? 0) + v)
+      t.l += x.l; t.a += x.a
+    }
+    const movel = membros[0].funcao === 'Consultora' || membros[0].funcao === 'Aplicadora'
+    let destino = membros[0].unidade_id as string, max = t.porUnidade.get(destino) ?? 0
+    if (movel) for (const [id, v] of t.porUnidade) if (v > max) { destino = id; max = v }
+    // a linha usa o cadastro da unidade de destino (função, ajustes); se não houver, o primeiro
+    const c = membros.find((m) => m.unidade_id === destino) ?? membros[0]
+    porUnidadeDaLinha.set(destino, [...(porUnidadeDaLinha.get(destino) ?? []), { c, t, cadastros: membros }])
   }
 
   const blocos: BlocoUnidade[] = []
   for (const { u, totalVendas, canc, ignorados, liquido, sem } of resumos) {
     const st = status.get(u.id) ?? 'Nenhum'
-    const daUnidade = ativos.filter((c) => c.unidade_id && unidadeDaLinha(c) === u.id)
-      .sort((a, b) => Number(a.unidade_id !== u.id) - Number(b.unidade_id !== u.id) || a.ordem - b.ordem)
-    const linhas = daUnidade.map((c) => {
-      const t = porPessoa.get(c.id) ?? { porUnidade: new Map<string, number>(), l: 0, a: 0 }
+    const daUnidade = (porUnidadeDaLinha.get(u.id) ?? [])
+      .sort((a, b) => Number(a.c.unidade_id !== u.id) - Number(b.c.unidade_id !== u.id) || a.c.ordem - b.c.ordem)
+    const linhas = daUnidade.map(({ c, t, cadastros }) => {
       const v = [...t.porUnidade.values()].reduce((s, x) => s + x, 0)
       const linha = montarLinha(c, st, liquido, v, t.a, t.l)
-      const fora = [...t.porUnidade].some(([id, x]) => id !== c.unidade_id && x)
+      const fora = [...t.porUnidade].some(([id, x]) => id !== u.id && x)
       if (fora) linha.vendasPorUnidade = [...t.porUnidade].filter(([, x]) => x).map(([id, x]) => ({ unidade: nomeUnidade.get(id) ?? '?', valor: x }))
         .sort((a, b) => b.valor - a.valor)
-      if (c.unidade_id !== u.id) linha.unidadeCadastro = nomeUnidade.get(c.unidade_id ?? '') ?? null
+      if (!cadastros.some((m) => m.unidade_id === u.id)) linha.unidadeCadastro = nomeUnidade.get(c.unidade_id ?? '') ?? null
       return linha
     })
     blocos.push({

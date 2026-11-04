@@ -170,7 +170,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li><b>Status</b> da unidade (Nenhum, Meta ou Super) é escolhido à mão; a Rede tem status próprio para a gerente.</li>
           <li><b>Vendas líquidas da unidade</b> = vendas do relatório por vendedor − cancelamentos do mês. Cancelamentos de vendas feitas há mais de 1 ano são ignorados.</li>
-          <li><b>Vendas em outra unidade</b> somam para a pessoa (usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades). Consultora e aplicadora aparecem na unidade em que mais venderam no mês e usam o status dela; abaixo do valor fica quanto vendeu em cada unidade. O líquido de cada unidade continua sendo o da própria loja.</li>
+          <li><b>Vendas em outra unidade</b> somam para a pessoa: usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades, e cadastros com o mesmo nome em unidades diferentes contam como uma pessoa só (não é preciso desativar nenhum). Consultora e aplicadora aparecem na unidade em que mais venderam no mês e usam o status dela; abaixo do valor fica quanto vendeu em cada unidade. O líquido de cada unidade continua sendo o da própria loja.</li>
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
           <li><b>Consultora</b>: prêmio de vendas pela faixa; + prêmio de agendamentos se tiver ≥ {regras.limiteAgendamentos}; + prêmio de captações (leads) se tiver ≥ {regras.limiteCaptacoes}.</li>
           <li><b>Aplicadora</b>: prêmio de vendas pela tabela das esteticistas.</li>
