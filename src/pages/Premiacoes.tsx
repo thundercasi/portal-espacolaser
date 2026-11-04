@@ -4,7 +4,7 @@ import { Download, Plus, Save, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import { equipeNoMes } from '../lib/equipe'
-import { addMeses, fimMes, fmtBRL, inicioMes, mesAtual, nomeMes } from '../lib/format'
+import { addMeses, fimMes, fmtBRL, fmtData, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import {
   ajustePadrao, calcularPremiacoes, STATUS,
   type Ajuste, type BlocoUnidade, type Cancelamento, type Contagem, type Regras, type Status, type VendaTransferida, type VendaVendedor,
@@ -64,7 +64,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
     const ini = inicioMes(mes), fim = fimMes(mes)
     const [v, c, p, m, s, a, t] = await Promise.all([
       supabase.from('vendas_vendedor').select('estabelecimento, vendedor, valor_liquido, dia, sem_data').eq('mes', ini),
-      supabase.from('cancelamentos').select('estabelecimento, data_cancelamento, data_venda, valor_cancelado').gte('data_cancelamento', ini).lte('data_cancelamento', fim),
+      supabase.from('cancelamentos').select('estabelecimento, data_cancelamento, data_venda, valor_cancelado, orcamento, item, vendedor, motivo').gte('data_cancelamento', ini).lte('data_cancelamento', fim),
       supabase.rpc('painel_diario', { p_ini: ini, p_fim: fim, p_origens_av: ORIGENS_AVALIACAO }),
       supabase.from('metas').select('*').eq('mes', ini),
       supabase.from('premiacao_status').select('unidade_id, status').eq('mes', ini),
@@ -172,7 +172,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
         <summary className="cursor-pointer font-medium text-slate-700">Como é calculado</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5">
           <li><b>Status</b> da unidade (Nenhum, Meta ou Super) é escolhido à mão; a Rede tem status próprio para a gerente.</li>
-          <li><b>Vendas líquidas da unidade</b> = vendas do relatório por vendedor − cancelamentos do mês. Cancelamentos de vendas feitas há mais de 1 ano são ignorados.</li>
+          <li><b>Vendas líquidas da unidade</b> = vendas do relatório por vendedor − cancelamentos do mês. Cancelamentos de vendas feitas há mais de 1 ano e cancelamentos no mesmo dia da venda são ignorados (a lista para conferir fica no fim de cada unidade).</li>
           <li><b>Vendas em outra unidade</b> somam para a pessoa: usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades, e cadastros com o mesmo nome em unidades diferentes contam como uma pessoa só (não é preciso desativar nenhum). Consultora e aplicadora aparecem na unidade em que mais venderam no mês e usam o status dela; abaixo do valor fica quanto vendeu em cada unidade. O líquido de cada unidade continua sendo o da própria loja.</li>
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
           <li><b>Consultora</b>: prêmio de vendas pela faixa; + prêmio de agendamentos se tiver ≥ {regras.limiteAgendamentos}; + prêmio de captações (leads) se tiver ≥ {regras.limiteCaptacoes}.</li>
@@ -217,7 +217,7 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
           </div>
         )}
         {b.cancelamentosIgnorados > 0 && (
-          <div className="text-xs text-slate-500">{brl0(b.cancelamentosIgnorados)} em cancelamentos de vendas com mais de 1 ano ignorados</div>
+          <div className="text-xs text-slate-500">{brl0(b.cancelamentosIgnorados)} em cancelamentos ignorados (venda há mais de 1 ano ou no mesmo dia)</div>
         )}
       </div>
       <div className="overflow-x-auto">
@@ -288,6 +288,37 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
           </tfoot>
         </table>
       </div>
+      {b.cancelamentosLista.length > 0 && (
+        <details className="border-t border-slate-100 px-4 py-2 text-sm">
+          <summary className="cursor-pointer text-xs font-medium text-slate-600">
+            Conferir cancelamentos do mês ({b.cancelamentosLista.length}): descontados {brl0(b.cancelamentos)} · ignorados {brl0(b.cancelamentosIgnorados)}
+          </summary>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="th">Cancelamento</th><th className="th">Venda</th><th className="th">Orçamento</th><th className="th">Item</th>
+                  <th className="th">Vendedor</th><th className="th">Motivo</th><th className="th text-right">Valor</th><th className="th">Situação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {b.cancelamentosLista.map((c, i) => (
+                  <tr key={i} className={c.ignorado ? 'text-slate-400' : ''}>
+                    <td className="td">{fmtData(c.data_cancelamento)}</td>
+                    <td className="td">{c.data_venda ? fmtData(c.data_venda) : '—'}</td>
+                    <td className="td">{c.orcamento}</td>
+                    <td className="td">{c.item}</td>
+                    <td className="td">{c.vendedor ?? ''}</td>
+                    <td className="td">{c.motivo ?? ''}</td>
+                    <td className="td text-right tabular-nums">{brl0(Number(c.valor_cancelado))}</td>
+                    <td className="td">{c.ignorado ? `ignorado · ${c.ignorado}` : <span className="font-medium text-red-700">descontado</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
       {b.semVinculo.length > 0 && (
         <div className="border-t border-amber-100 bg-amber-50/60 px-4 py-2 text-xs text-amber-800">
           Usuários sem vínculo com a equipe (não entram em ninguém):{' '}

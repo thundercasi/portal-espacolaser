@@ -42,7 +42,7 @@ Diferenças em relação à planilha:
 
 ## Premiações
 
-- **Cancelamentos** de vendas feitas há mais de 1 ano antes do cancelamento não descontam das vendas da unidade.
+- **Cancelamentos** de vendas feitas há mais de 1 ano antes do cancelamento e cancelamentos no mesmo dia da venda não descontam das vendas da unidade. Em cada unidade, "Conferir cancelamentos do mês" lista todos, com a situação (descontado ou ignorado e o motivo).
 - **Faixa** = vendas líquidas da pessoa ÷ 10.000. Acima da última faixa da tabela, paga a última faixa (a planilha zerava).
 - **Agendamentos** = criados no mês pelo usuário (Usuário de Criação); **captações** = leads cadastrados no mês pelo usuário.
 - O prêmio só é pago se **Bateu meta** estiver marcado. Funcionário do mês só conta no status Super.

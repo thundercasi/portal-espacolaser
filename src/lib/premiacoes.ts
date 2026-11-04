@@ -24,7 +24,10 @@ export const ajustePadrao: Ajuste = { bateu_meta: false, func_mes: 0, sem_garant
 export interface VendaVendedor { estabelecimento: string; vendedor: string; valor_liquido: number; dia: string; sem_data: boolean }
 /** venda lançada no login de outra pessoa, transferida para quem vendeu (Cadastros → Transferência de vendas) */
 export interface VendaTransferida { estabelecimento: string; vendedor: string; data_pagamento: string; valor_liquido: number; colaborador_id: string }
-export interface Cancelamento { estabelecimento: string; data_cancelamento: string; data_venda: string | null; valor_cancelado: number }
+export interface Cancelamento {
+  estabelecimento: string; data_cancelamento: string; data_venda: string | null; valor_cancelado: number
+  orcamento?: string; item?: string; vendedor?: string | null; motivo?: string | null
+}
 /** contagem por estabelecimento + usuário (leads = captações; agendamentos = criados no mês) */
 export interface Contagem { estabelecimento: string; usuario: string; data: string; leads: number; agendamentos: number }
 
@@ -53,20 +56,27 @@ export interface BlocoUnidade {
   status: Status
   vendas: number
   cancelamentos: number
-  cancelamentosIgnorados: number // venda com mais de 1 ano antes do cancelamento
+  cancelamentosIgnorados: number // venda com mais de 1 ano antes do cancelamento ou cancelada no mesmo dia
+  cancelamentosLista: (Cancelamento & { ignorado: string | null })[] // para conferência
   liquido: number
   linhas: LinhaPremio[]
   semVinculo: { usuario: string; vendas: number; leads: number; agendamentos: number }[]
   total: number
 }
 
-/** venda feita há mais de 1 ano antes do cancelamento → não desconta */
-export function cancelamentoConta(c: Cancelamento) {
-  if (!c.data_venda) return true
+/**
+ * Cancelamento que não desconta das vendas (devolve o motivo):
+ *  - venda feita há mais de 1 ano antes do cancelamento;
+ *  - cancelada no mesmo dia da venda (a venda nem chega a entrar no relatório).
+ */
+export function motivoIgnorarCancelamento(c: Cancelamento): string | null {
+  if (!c.data_venda) return null
+  if (c.data_venda === c.data_cancelamento) return 'mesmo dia'
   const [a, m, d] = c.data_cancelamento.split('-').map(Number)
   const limite = `${a - 1}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-  return c.data_venda >= limite
+  return c.data_venda < limite ? 'venda há mais de 1 ano' : null
 }
+export const cancelamentoConta = (c: Cancelamento) => !motivoIgnorarCancelamento(c)
 
 function linhaDaFaixa<T extends { faixa: number }>(tabela: T[], faixa: number): { linha: T | null; acima: boolean } {
   if (!tabela.length) return { linha: null, acima: false }
@@ -184,7 +194,8 @@ export function calcularPremiacoes(args: {
       d.porUnidade.set(u.id, (d.porUnidade.get(u.id) ?? 0) + v)
     }
     for (const x of contagens.filter((x) => normalizar(x.estabelecimento) === est)) somar(x.usuario, x.data, 0, Number(x.leads), Number(x.agendamentos))
-    return { u, totalVendas, canc, ignorados, liquido: totalVendas - canc, sem }
+    const lista = cancU.map((x) => ({ ...x, ignorado: motivoIgnorarCancelamento(x) })).sort((a, b) => a.data_cancelamento.localeCompare(b.data_cancelamento))
+    return { u, totalVendas, canc, ignorados, liquido: totalVendas - canc, sem, lista }
   })
 
   // consultora/aplicadora: cadastros com o mesmo nome em unidades diferentes são a mesma pessoa.
@@ -213,7 +224,7 @@ export function calcularPremiacoes(args: {
   }
 
   const blocos: BlocoUnidade[] = []
-  for (const { u, totalVendas, canc, ignorados, liquido, sem } of resumos) {
+  for (const { u, totalVendas, canc, ignorados, liquido, sem, lista } of resumos) {
     const st = status.get(u.id) ?? 'Nenhum'
     const daUnidade = (porUnidadeDaLinha.get(u.id) ?? [])
       .sort((a, b) => Number(a.c.unidade_id !== u.id) - Number(b.c.unidade_id !== u.id) || a.c.ordem - b.c.ordem)
@@ -227,7 +238,7 @@ export function calcularPremiacoes(args: {
       return linha
     })
     blocos.push({
-      unidade: u, status: st, vendas: totalVendas, cancelamentos: canc, cancelamentosIgnorados: ignorados, liquido, linhas,
+      unidade: u, status: st, vendas: totalVendas, cancelamentos: canc, cancelamentosIgnorados: ignorados, cancelamentosLista: lista, liquido, linhas,
       semVinculo: [...sem.values()].filter((x) => x.vendas || x.leads || x.agendamentos).sort((a, b) => b.vendas - a.vendas),
       total: linhas.reduce((s, l) => s + l.total, 0),
     })
@@ -251,7 +262,7 @@ export function calcularPremiacoes(args: {
       return linha
     })
     blocos.push({
-      unidade: null, status: st, vendas: vendasT, cancelamentos: cancT, cancelamentosIgnorados: ignT, liquido, linhas,
+      unidade: null, status: st, vendas: vendasT, cancelamentos: cancT, cancelamentosIgnorados: ignT, cancelamentosLista: [], liquido, linhas,
       semVinculo: [], total: linhas.reduce((s, l) => s + l.total, 0),
     })
   }
