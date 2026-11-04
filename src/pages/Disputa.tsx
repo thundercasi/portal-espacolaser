@@ -8,7 +8,12 @@ import { ErrorBox } from '../components/ui'
 type Tipo = 'comparecimentos' | 'vendas_aplicadoras'
 interface Disputa { id: string; nome: string; premio: string | null; inicio: string; fim: string; tipo: Tipo }
 // linha comum às duas disputas: pontos decide a posição; detalhe/taxa são o texto de apoio
-interface Linha { participante: string; unidade: string; pontos: number; desempate: number; detalhe: string; taxa: string }
+interface Linha { participante: string; unidade: string; pontos: number; desempate: number; detalhe: string; taxa: string; quebra: string | null }
+// "Medon 300 · Tivoli 20" quando a pessoa fez algo em mais de uma unidade
+const quebrar = (por: Record<string, number> | null, fmt: (v: number) => string) => {
+  const e = Object.entries(por ?? {}).filter(([, v]) => Number(v)).sort((a, b) => Number(b[1]) - Number(a[1]))
+  return e.length > 1 ? e.map(([u, v]) => `${u} ${fmt(Number(v))}`).join(' · ') : null
+}
 
 const ABAS: { tipo: Tipo; param: string; rotulo: string }[] = [
   { tipo: 'comparecimentos', param: 'consultoras', rotulo: 'Consultoras · Comparecimentos' },
@@ -50,17 +55,17 @@ export default function DisputaPage() {
     if (aba.tipo === 'comparecimentos') {
       const r = await supabase.rpc('ranking_disputa', { p_disputa: d.data.id })
       if (r.error) { setErro(r.error.message); return }
-      setLinhas(((r.data ?? []) as { participante: string; unidade: string; leads: number; comparecimentos: number }[]).map((x) => {
+      setLinhas(((r.data ?? []) as { participante: string; unidade: string; leads: number; comparecimentos: number; por_unidade: Record<string, number> | null }[]).map((x) => {
         const leads = Number(x.leads), comp = Number(x.comparecimentos)
-        return { participante: x.participante, unidade: x.unidade, pontos: comp, desempate: comp / (leads || 1), detalhe: `${leads} leads`, taxa: `${fmtPct(comp / (leads || 1), 1)} compareceram` }
+        return { participante: x.participante, unidade: x.unidade, pontos: comp, desempate: comp / (leads || 1), detalhe: `${leads} leads`, taxa: `${fmtPct(comp / (leads || 1), 1)} compareceram`, quebra: quebrar(x.por_unidade, (v) => `${v} leads`) }
       }))
     } else {
       const r = await supabase.rpc('ranking_vendas_aplicadoras', { p_disputa: d.data.id })
       if (r.error) { setErro(r.error.message); return }
-      const dados = (r.data ?? []) as { participante: string; unidade: string; funcao: string | null; vendas: number; valor: number; cancelado: number }[]
+      const dados = (r.data ?? []) as { participante: string; unidade: string; funcao: string | null; vendas: number; valor: number; cancelado: number; por_unidade: Record<string, number> | null }[]
       setLinhas(dados.filter((x) => x.funcao).map((x) => {
         const qtd = Number(x.vendas), canc = Number(x.cancelado), total = Number(x.valor) - canc
-        return { participante: x.participante, unidade: x.unidade, pontos: total, desempate: qtd, detalhe: `${qtd} ${qtd === 1 ? 'venda' : 'vendas'}`, taxa: canc ? `${fmtBRL(canc)} cancelado` : `ticket ${brl0.format(qtd ? total / qtd : 0)}` }
+        return { participante: x.participante, unidade: x.unidade, pontos: total, desempate: qtd, detalhe: `${qtd} ${qtd === 1 ? 'venda' : 'vendas'}`, taxa: canc ? `${fmtBRL(canc)} cancelado` : `ticket ${brl0.format(qtd ? total / qtd : 0)}`, quebra: quebrar(x.por_unidade, (v) => brl0.format(v)) }
       }))
     }
     setErro(null)
@@ -170,6 +175,7 @@ export default function DisputaPage() {
                     <div className={`mx-auto grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br ${m.fundo} text-lg font-extrabold ${m.texto} shadow`}>{m.nome}</div>
                     <div className="mt-3 truncate text-lg font-bold text-slate-900" title={l.participante}>{nomeCurto(l.participante)}</div>
                     <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${corDe(l.unidade).chip}`}>{l.unidade}</span>
+                    {l.quebra && <div className="mt-1 text-[11px] text-slate-500">{l.quebra}</div>}
                     <div className={`mt-3 font-extrabold tabular-nums text-slate-900 ${vendas ? 'text-3xl xl:text-4xl' : 'text-5xl'}`}>{fmtPontos(l.pontos)}</div>
                     <div className="text-xs uppercase tracking-wide text-slate-500">{unidadePontos}</div>
                     <div className="mt-2 text-sm text-slate-600">{l.detalhe} · {l.taxa}</div>
@@ -193,6 +199,7 @@ export default function DisputaPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="truncate font-semibold text-slate-900" title={l.participante}>{nomeCurto(l.participante)}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${corDe(l.unidade).chip}`}>{l.unidade}</span>
+                      {l.quebra && <span className="text-[11px] text-slate-500">{l.quebra}</span>}
                     </div>
                     <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
                       <div className={`h-full rounded-full ${corDe(l.unidade).barra} transition-all duration-700`} style={{ width: `${Math.max(l.pontos, 0) / lider * 100}%` }} />
