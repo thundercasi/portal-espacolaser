@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
+import { equipeNoMes } from '../lib/equipe'
 import { calcularPainel, metasNoNivel, ORIGENS_AVALIACAO, type NivelMeta, type ConjuntoIndicadores, type Indicador, type Painel as TPainel } from '../lib/painel'
 import { fimMes, fmtBRL, fmtNum, fmtPct, hojeISO, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import type { LinhaPainel, Meta } from '../lib/types'
@@ -13,8 +14,9 @@ const dec = (v: number | null | undefined) => (v == null ? '—' : fmtNum(Math.r
 const brl0 = (v: number | null | undefined) => (v == null ? '—' : fmtBRL(Math.round(v)).replace(/,00$/, ''))
 
 export default function Painel() {
-  const { unidades, colaboradores, usuarios, admin } = useApp()
+  const { unidades, colaboradores: cadastro, vigencias, usuarios, admin } = useApp()
   const [mes, setMes] = useState(mesAtual())
+  const colaboradores = useMemo(() => equipeNoMes(cadastro, vigencias, mes), [cadastro, vigencias, mes])
   const [unidadeId, setUnidadeId] = useState<string>('todas')
   // nível das metas exibidas (lembrado neste navegador)
   const [nivel, setNivelState] = useState<NivelMeta>(() => {

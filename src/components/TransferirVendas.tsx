@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
+import { equipeNoMes } from '../lib/equipe'
 import { criarResolvedor } from '../lib/depara'
 import { fimMes, fmtBRL, fmtData, inicioMes, mesAtual } from '../lib/format'
 import { MonthPicker } from './ui'
@@ -15,9 +16,10 @@ const chave = (v: { id_orcamento: number; vendedor: string }) => `${v.id_orcamen
  * sobrevive à reimportação; vale nas premiações e na disputa das aplicadoras.
  */
 export default function TransferirVendas({ setErro }: { setErro: (s: string | null) => void }) {
-  const { unidades, colaboradores, usuarios } = useApp()
+  const { unidades, colaboradores: cadastro, vigencias, usuarios } = useApp()
   const [sel, setSel] = useState('')
   const [mes, setMes] = useState(mesAtual())
+  const colaboradores = useMemo(() => equipeNoMes(cadastro, vigencias, mes), [cadastro, vigencias, mes])
   const [vendedor, setVendedor] = useState('')
   const [soTransferidas, setSoTransferidas] = useState(false)
   const [vendas, setVendas] = useState<Venda[] | null>(null)

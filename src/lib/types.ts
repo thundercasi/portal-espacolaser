@@ -9,7 +9,10 @@ export interface Unidade {
 export type Funcao = 'Consultora' | 'Aplicadora' | 'Subgerente' | 'Gerente' | 'Outro'
 export const FUNCOES: Funcao[] = ['Consultora', 'Aplicadora', 'Subgerente', 'Gerente', 'Outro']
 
-/** pessoa da equipe; unidade_id null = rede (ex.: gerente das 3 unidades) */
+/**
+ * pessoa da equipe; unidade_id null = rede (ex.: gerente das 3 unidades).
+ * unidade_id, funcao e ativo valem por mês (colaborador_vigencias): use equipeNoMes() de src/lib/equipe.ts.
+ */
 export interface Colaborador {
   id: string
   unidade_id: string | null
@@ -29,7 +32,17 @@ export interface ColaboradorUsuario {
   usuario: string
   colaborador_id: string
   vigente_de: string | null  // YYYY-MM-DD; null = sem início
-  vigente_ate: string | null // YYYY-MM-DD; null = sem fim (ambos null = vínculo permanente)
+  vigente_ate: string | null // YYYY-MM-DD; null = sem fim
+  do_cadastro: boolean       // true = lista do cadastro (vigência por mês); false = vínculo com período em dias
+}
+
+/** unidade, função e ativa da pessoa a partir de um mês (vale até a próxima vigência) */
+export interface Vigencia {
+  colaborador_id: string
+  mes: string // YYYY-MM-01
+  unidade_id: string | null
+  funcao: Funcao
+  ativo: boolean
 }
 
 export interface Meta {

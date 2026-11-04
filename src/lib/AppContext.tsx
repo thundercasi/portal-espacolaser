@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
-import type { Colaborador, ColaboradorUsuario, Unidade } from './types'
+import type { Colaborador, ColaboradorUsuario, Unidade, Vigencia } from './types'
 
 export type Perfil = 'admin' | 'consulta'
 
@@ -11,11 +11,12 @@ interface Ctx {
   perfil: Perfil | null
   admin: boolean
   unidades: Unidade[]
-  colaboradores: Colaborador[]
+  colaboradores: Colaborador[] // cadastro base; para um mês use equipeNoMes(colaboradores, vigencias, mes)
+  vigencias: Vigencia[]
   usuarios: ColaboradorUsuario[]
   reloadCadastros: () => Promise<void>
 }
-const AppCtx = createContext<Ctx>({ session: null, membro: null, perfil: null, admin: false, unidades: [], colaboradores: [], usuarios: [], reloadCadastros: async () => {} })
+const AppCtx = createContext<Ctx>({ session: null, membro: null, perfil: null, admin: false, unidades: [], colaboradores: [], vigencias: [], usuarios: [], reloadCadastros: async () => {} })
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -24,6 +25,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+  const [vigencias, setVigencias] = useState<Vigencia[]>([])
   const [usuarios, setUsuarios] = useState<ColaboradorUsuario[]>([])
 
   useEffect(() => {
@@ -38,20 +40,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPerfil((p as Perfil | null) ?? null)
     setMembro(Boolean(p))
     if (!p) return
-    const [u, c, cu] = await Promise.all([
+    const [u, c, v, cu] = await Promise.all([
       supabase.from('unidades').select('*').order('ordem'),
       supabase.from('colaboradores').select('*').order('ordem'),
+      supabase.from('colaborador_vigencias').select('*').order('mes'),
       supabase.from('colaborador_usuarios').select('*'),
     ])
     setUnidades((u.data ?? []) as Unidade[])
     setColaboradores(((c.data ?? []) as Colaborador[]).map((x) => ({ ...x, valor_fixo: Number(x.valor_fixo) })))
+    setVigencias((v.data ?? []) as Vigencia[])
     setUsuarios((cu.data ?? []) as ColaboradorUsuario[])
   }, [session])
 
   useEffect(() => { reloadCadastros() }, [reloadCadastros])
 
   if (!ready) return null
-  return <AppCtx.Provider value={{ session, membro, perfil, admin: perfil === 'admin', unidades, colaboradores, usuarios, reloadCadastros }}>{children}</AppCtx.Provider>
+  return <AppCtx.Provider value={{ session, membro, perfil, admin: perfil === 'admin', unidades, colaboradores, vigencias, usuarios, reloadCadastros }}>{children}</AppCtx.Provider>
 }
 
 export const useApp = () => useContext(AppCtx)

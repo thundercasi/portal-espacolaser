@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Download, Plus, Save, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
+import { equipeNoMes } from '../lib/equipe'
 import { addMeses, fimMes, fmtBRL, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import {
   ajustePadrao, calcularPremiacoes, STATUS,
@@ -51,7 +52,9 @@ export default function Premiacoes() {
 // ---------------------------------------------------------------------------
 
 function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErro: (s: string | null) => void }) {
-  const { unidades, colaboradores, usuarios } = useApp()
+  const { unidades, colaboradores: cadastro, vigencias, usuarios } = useApp()
+  // equipe como estava no mês (unidade, função e ativa por mês)
+  const colaboradores = useMemo(() => equipeNoMes(cadastro, vigencias, mes), [cadastro, vigencias, mes])
   const [dados, setDados] = useState<{
     vendas: VendaVendedor[]; transferencias: VendaTransferida[]; cancelamentos: Cancelamento[]; contagens: Contagem[]; metas: Meta[]
     status: Map<string, Status>; ajustes: Map<string, Ajuste>
@@ -245,7 +248,7 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
                   </td>
                   <td className="td text-left text-slate-500">{c.funcao}</td>
                   <td className="td">
-                    {b.unidade ? brl0(l.vendas) : '—'}
+                    {b.unidade || l.vendas ? brl0(l.vendas) : '—'}
                     {l.vendasPorUnidade && (
                       <div className="whitespace-nowrap text-[11px] text-slate-500">{l.vendasPorUnidade.map((x) => `${x.unidade} ${brl0(x.valor)}`).join(' · ')}</div>
                     )}

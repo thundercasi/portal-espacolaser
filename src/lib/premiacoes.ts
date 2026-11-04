@@ -97,7 +97,8 @@ export function calcularPremiacoes(args: {
   const quemEra = criarResolvedor(colaboradores, usuarios)
   const pessoa = (unidadeId: string, usuario: string, data: string) => {
     const c = quemEra(unidadeId, usuario, data)
-    return c && c.unidade_id === unidadeId ? c : null
+    // pessoa da Rede (gerente) pode ter usuário em qualquer unidade
+    return c && (c.unidade_id === unidadeId || !c.unidade_id) ? c : null
   }
   // relatório de vendas sem data: vale o vínculo do último dia do mês
   const ultimoDiaDoMes = (dia: string) => {
@@ -240,7 +241,15 @@ export function calcularPremiacoes(args: {
     const cancT = blocos.reduce((s, b) => s + b.cancelamentos, 0)
     const ignT = blocos.reduce((s, b) => s + b.cancelamentosIgnorados, 0)
     const liquido = vendasT - cancT
-    const linhas = daRede.map((c) => montarLinha(c, st, liquido, 0, 0, 0))
+    const linhas = daRede.map((c) => {
+      // vendas pelos usuários dela: só para conferência (o prêmio é % do líquido da rede)
+      const t = porPessoa.get(c.id)
+      const v = t ? [...t.porUnidade.values()].reduce((s, x) => s + x, 0) : 0
+      const linha = montarLinha(c, st, liquido, v, t?.a ?? 0, t?.l ?? 0)
+      if (t && [...t.porUnidade.values()].some(Boolean)) linha.vendasPorUnidade = [...t.porUnidade].filter(([, x]) => x)
+        .map(([id, x]) => ({ unidade: nomeUnidade.get(id) ?? '?', valor: x })).sort((a, b) => b.valor - a.valor)
+      return linha
+    })
     blocos.push({
       unidade: null, status: st, vendas: vendasT, cancelamentos: cancT, cancelamentosIgnorados: ignT, liquido, linhas,
       semVinculo: [], total: linhas.reduce((s, l) => s + l.total, 0),
