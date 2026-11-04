@@ -71,6 +71,22 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
     const { error } = await supabase.from('colaboradores').update(patch).eq('id', id)
     setErro(error?.message ?? null); reloadCadastros()
   }
+  /** muda a pessoa de unidade (ou para a Rede); os vínculos de usuário vão junto (na Rede não se aplicam e são apagados) */
+  async function mover(c: Colaborador, destino: string) {
+    const paraRede = destino === REDE
+    const nomeDestino = paraRede ? 'Rede (3 unidades)' : unidades.find((u) => u.id === destino)?.nome ?? ''
+    const qtd = usuarios.filter((u) => u.colaborador_id === c.id).length
+    const aviso = !qtd ? '' : paraRede
+      ? ` Os ${qtd} vínculos de usuário dela serão apagados (na Rede não se aplicam).`
+      : ` Os ${qtd} vínculos de usuário dela vão junto.`
+    if (!confirm(`Mover ${c.nome} para ${nomeDestino}?${aviso}`)) return
+    const v = paraRede
+      ? await supabase.from('colaborador_usuarios').delete().eq('colaborador_id', c.id)
+      : await supabase.from('colaborador_usuarios').update({ unidade_id: destino }).eq('colaborador_id', c.id)
+    if (v.error) { setErro(v.error.message.includes('duplicate') ? 'Algum usuário desta pessoa já está vinculado a outra pessoa na unidade de destino. Ajuste os vínculos antes de mover.' : v.error.message); return }
+    const ordem = colaboradores.filter((x) => (paraRede ? !x.unidade_id : x.unidade_id === destino)).length + 1
+    await salvar(c.id, { unidade_id: paraRede ? null : destino, ordem })
+  }
   async function salvarUsuarios(c: Colaborador, chaves: string[]) {
     if (!c.unidade_id) return
     const novos = [...new Set(chaves)].sort()
@@ -152,6 +168,7 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
           <tr>
             <th className="th">Nome</th>
             <th className="th">Função</th>
+            <th className="th" title="Unidade da pessoa; a gerente das 3 unidades fica em Rede">Unidade</th>
             {!rede && <th className="th">Usuários no sistema</th>}
             <th className="th" title="Aparece como coluna no painel do funil">No painel</th>
             <th className="th" title="Entra na divisão da meta de leads/agendamentos do funil">Meta funil</th>
@@ -168,6 +185,12 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
               <td className="td">
                 <select className="input" value={c.funcao} onChange={(e) => salvar(c.id, { funcao: e.target.value as Funcao })}>
                   {FUNCOES.map((f) => <option key={f}>{f}</option>)}
+                </select>
+              </td>
+              <td className="td">
+                <select className="input" value={c.unidade_id ?? REDE} onChange={(e) => mover(c, e.target.value)}>
+                  {unidades.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                  <option value={REDE}>Rede</option>
                 </select>
               </td>
               {!rede && (
@@ -193,6 +216,7 @@ export default function Equipe({ setErro }: { setErro: (s: string | null) => voi
                 {FUNCOES.map((f) => <option key={f}>{f}</option>)}
               </select>
             </td>
+            <td className="td text-sm text-slate-500">{rede ? 'Rede' : unidade?.nome}</td>
             {!rede && (
               <td className="td"><SeletorUsuarios opcoes={opcoes} valor={novo.usuarios} donoDe={donoDe(null)} onChange={(v) => setNovo({ ...novo, usuarios: v })} /></td>
             )}
