@@ -161,9 +161,11 @@ window.CF = {
         ['ID Orç.', 'Data de Pagamento', 'Estabelecimento', 'Vendedor', 'Origem Mídia', 'Tipo', 'Contrato Assinado', 'V. Bruto', 'V. Desconto', 'V. Líquido'],
         ...rows.map((r) => [r.BudgetId, CF.soData(r.FormattedDate ?? r.Date), r.Establishment, r.Salesman ?? '', r.MediaType ?? '', r.Type ?? '', r.SignedContract ?? '', r.GrossValue ?? 0, r.DiscountValue ?? 0, r.NetValue ?? 0]),
       ] })
-      // mesma informação somada por unidade + vendedor + dia: alimenta as Premiações (vendas por vendedor)
+      // mesma informação somada por unidade + vendedor + dia: alimenta as Premiações (vendas por vendedor).
+      // Sem as linhas negativas de "Cancelamento": como no relatório Vendas por vendedor do ELOS, os
+      // cancelamentos são abatidos uma vez só, pelo relatório de cancelamentos (com as regras de mesmo dia / 1 ano)
       const pv = new Map()
-      for (const r of rows) {
+      for (const r of rows.filter((r) => !/cancelamento/i.test(r.Type ?? ''))) {
         const dia = CF.soData(r.FormattedDate ?? r.Date)
         const k = [r.Establishment, r.Salesman ?? '', dia].join('|')
         const t = pv.get(k) ?? [r.Establishment, r.Salesman ?? '', dia, 0, 0, 0]
