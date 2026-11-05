@@ -140,6 +140,9 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
 
   if (!dados || !r) return <div className="text-sm text-slate-500">Carregando…</div>
   const metaDe = (unidadeId: string) => dados.metas.find((m) => m.unidade_id === unidadeId)
+  const rede = r.blocos.find((b) => b.resumo)
+  const metaRede = dados.metas.reduce((s, m) => s + Number(m.meta_faturamento), 0)
+  const superRede = dados.metas.reduce((s, m) => s + Number(m.super_meta), 0)
 
   return (
     <div className="space-y-4">
@@ -153,10 +156,24 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
           <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Total de premiações — {nomeMes(mes)}</div>
           <div className="text-2xl font-semibold tabular-nums text-brand-700">{brl0(r.total)}</div>
         </div>
+        {rede && (
+          // status da Rede (gerente): define a taxa do prêmio dela, que aparece dividido dentro de cada unidade
+          <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+            <label className="flex items-center gap-2 font-medium">
+              Status da Rede (gerente)
+              <select className="input w-32" value={rede.status} onChange={(e) => salvarStatus(null, e.target.value as Status)}>
+                {STATUS.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </label>
+            <span className="text-slate-600">Líquido das 3 unidades <b className="tabular-nums text-slate-900">{brl0(rede.liquido)}</b></span>
+            {metaRede > 0 && <span className="text-xs text-slate-500">Meta {brl0(metaRede)} {rede.liquido >= metaRede ? '✓' : ''}</span>}
+            {superRede > 0 && <span className="text-xs text-slate-500">Super {brl0(superRede)} {rede.liquido >= superRede ? '✓' : ''}</span>}
+          </div>
+        )}
         <button className="btn-ghost" onClick={exportarCSV}><Download size={16} /> Exportar planilha (CSV)</button>
       </div>
 
-      {r.blocos.map((b) => (
+      {r.blocos.filter((b) => !b.resumo).map((b) => (
         <BlocoCard key={b.unidade?.id ?? 'rede'} b={b} regras={regras}
           meta={b.unidade ? metaDe(b.unidade.id) : undefined} metasRede={b.unidade ? undefined : dados.metas}
           onStatus={(st) => salvarStatus(b.unidade?.id ?? null, st)} onAjuste={salvarAjuste} />
@@ -177,7 +194,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
           <li><b>Consultora</b>: prêmio de vendas pela faixa; + prêmio de agendamentos se tiver ≥ {regras.limiteAgendamentos}; + prêmio de captações (leads) se tiver ≥ {regras.limiteCaptacoes}.</li>
           <li><b>Aplicadora</b>: prêmio de vendas pela tabela das esteticistas.</li>
-          <li><b>Subgerente</b>: % das vendas líquidas da unidade. <b>Gerente</b>: % das vendas líquidas das unidades, com o status da Rede; aparece em cada unidade com a parte que ela paga (proporcional ao líquido da unidade). O bloco da Rede fica só como resumo e para escolher o status.</li>
+          <li><b>Subgerente</b>: % das vendas líquidas da unidade. <b>Gerente</b>: % das vendas líquidas das unidades, com o status da Rede; aparece em cada unidade com a parte que ela paga (proporcional ao líquido da unidade). O status da Rede fica no topo da tela.</li>
           <li><b>Funcionário do mês</b> só conta quando o status é Super. Os prêmios só são pagos se "Bateu meta" estiver marcado.</li>
           <li><b>Garantido</b>: consultora sem prêmio de meta recebe {brl0(regras.garantidoConsultora)}, a menos que seja retirado (faltas etc.).</li>
           <li><b>Valor fixo</b>: exceções cadastradas em Cadastros → Equipe (ex.: limpeza), pago todo mês.</li>
@@ -272,7 +289,12 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
                   <td className="td">{l.premioVendas ? brl0(l.premioVendas) : ''}</td>
                   <td className="td">
                     {l.daRede
-                      ? (l.funcMes ? brl0(l.funcMes) : '')
+                      ? (l.daRede.status === 'Super'
+                        // valor total do mês; o prêmio mostrado ao lado já vem dividido entre as unidades
+                        ? <span title={`Total do mês (dividido entre as unidades; parte desta: ${brl0(l.funcMes)})`}>
+                            <NumInput className="ml-auto w-24 text-right" value={l.ajuste.func_mes || null} placeholder="0" onChange={(v) => onAjuste(c.id, { func_mes: v })} />
+                          </span>
+                        : '')
                       : usaMetas && b.status === 'Super'
                       ? <NumInput className="ml-auto w-24 text-right" value={l.ajuste.func_mes || null} placeholder="0" onChange={(v) => onAjuste(c.id, { func_mes: v })} />
                       : ''}
