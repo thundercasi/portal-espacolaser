@@ -29,11 +29,12 @@ export default function Premiacoes() {
     })
   }, [])
 
+  const { admin } = useApp()
   return (
     <div>
-      <PageHeader title="Premiações" subtitle="Cálculo mensal dos prêmios da equipe"
+      <PageHeader title="Premiações" subtitle={admin ? 'Cálculo mensal dos prêmios da equipe' : 'Cálculo mensal dos prêmios da equipe — só leitura'}
         actions={aba === 'calculo' ? <MonthPicker value={mes} onChange={setMes} /> : null} />
-      <div className="mb-4 flex gap-1.5">
+      <div className={`mb-4 flex gap-1.5 ${admin ? '' : 'hidden'}`}>
         {([['calculo', 'Cálculo do mês'], ['regras', 'Regras']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setAba(k)}
             className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${aba === k ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100'}`}>
@@ -43,7 +44,7 @@ export default function Premiacoes() {
       </div>
       <ErrorBox msg={erro} />
       {!regras ? <div className="text-sm text-slate-500">Carregando…</div>
-        : aba === 'calculo' ? <Calculo mes={mes} regras={regras} setErro={setErro} />
+        : aba === 'calculo' || !admin ? <Calculo mes={mes} regras={regras} setErro={setErro} />
         : <EditorRegras regras={regras} onSalvo={setRegras} setErro={setErro} />}
     </div>
   )
@@ -52,7 +53,7 @@ export default function Premiacoes() {
 // ---------------------------------------------------------------------------
 
 function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErro: (s: string | null) => void }) {
-  const { unidades, colaboradores: cadastro, vigencias, usuarios } = useApp()
+  const { unidades, colaboradores: cadastro, vigencias, usuarios, admin } = useApp()
   // equipe como estava no mês (unidade, função e ativa por mês)
   const colaboradores = useMemo(() => equipeNoMes(cadastro, vigencias, mes), [cadastro, vigencias, mes])
   const [dados, setDados] = useState<{
@@ -146,7 +147,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
 
   return (
     <div className="space-y-4">
-      {dados.vendas.length === 0 && (
+      {admin && dados.vendas.length === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Não há vendas por vendedor importadas para {nomeMes(mes).toLowerCase()}. <Link to="/importar" className="font-medium underline">Importar o relatório</Link> (escolha o mês na conferência).
         </div>
@@ -158,7 +159,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
         </div>
         {rede && (
           // status da Rede (gerente): define a taxa do prêmio dela, que aparece dividido dentro de cada unidade
-          <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+          <fieldset disabled={!admin} className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
             <label className="flex items-center gap-2 font-medium">
               Status da Rede (gerente)
               <select className="input w-32" value={rede.status} onChange={(e) => salvarStatus(null, e.target.value as Status)}>
@@ -168,18 +169,20 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
             <span className="text-slate-600">Líquido das 3 unidades <b className="tabular-nums text-slate-900">{brl0(rede.liquido)}</b></span>
             {metaRede > 0 && <span className="text-xs text-slate-500">Meta {brl0(metaRede)} {rede.liquido >= metaRede ? '✓' : ''}</span>}
             {superRede > 0 && <span className="text-xs text-slate-500">Super {brl0(superRede)} {rede.liquido >= superRede ? '✓' : ''}</span>}
-          </div>
+          </fieldset>
         )}
         <button className="btn-ghost" onClick={exportarCSV}><Download size={16} /> Exportar planilha (CSV)</button>
       </div>
 
-      {r.blocos.filter((b) => !b.resumo).map((b) => (
-        <BlocoCard key={b.unidade?.id ?? 'rede'} b={b} regras={regras}
-          meta={b.unidade ? metaDe(b.unidade.id) : undefined} metasRede={b.unidade ? undefined : dados.metas}
-          onStatus={(st) => salvarStatus(b.unidade?.id ?? null, st)} onAjuste={salvarAjuste} />
-      ))}
+      <fieldset disabled={!admin} className="space-y-4">
+        {r.blocos.filter((b) => !b.resumo).map((b) => (
+          <BlocoCard key={b.unidade?.id ?? 'rede'} b={b} regras={regras}
+            meta={b.unidade ? metaDe(b.unidade.id) : undefined} metasRede={b.unidade ? undefined : dados.metas}
+            onStatus={(st) => salvarStatus(b.unidade?.id ?? null, st)} onAjuste={salvarAjuste} />
+        ))}
+      </fieldset>
 
-      {colaboradores.filter((c) => !c.unidade_id && c.ativo).length === 0 && (
+      {admin && colaboradores.filter((c) => !c.unidade_id && c.ativo).length === 0 && (
         <p className="text-xs text-slate-500">
           Para calcular o prêmio da gerente sobre as 3 unidades, cadastre-a em <Link to="/cadastros" className="underline">Cadastros → Equipe → Rede</Link> com a função Gerente.
         </p>

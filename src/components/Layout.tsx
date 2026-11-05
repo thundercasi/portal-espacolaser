@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase'
 import { useApp } from '../lib/AppContext'
 import AlterarSenha from './AlterarSenha'
 
-const NAV = [
+// consulta: aparece para o perfil Consulta; premiacoes: para quem tem Premiações (só leitura)
+type ItemNav = { to: string; label: string; icon: typeof BarChart3; end?: boolean; consulta?: boolean; premiacoes?: boolean }
+const NAV: { titulo: string; itens: ItemNav[] }[] = [
   {
     titulo: 'Funil',
     itens: [
@@ -18,7 +20,7 @@ const NAV = [
   {
     titulo: 'Ferramentas',
     itens: [
-      { to: '/premiacoes', label: 'Premiações', icon: Trophy },
+      { to: '/premiacoes', label: 'Premiações', icon: Trophy, premiacoes: true },
       { to: '/cancelamento', label: 'Cancelamento', icon: Calculator },
     ],
   },
@@ -33,8 +35,10 @@ const NAV = [
 export default function Layout() {
   const [aberto, setAberto] = useState(false)
   const [trocarSenha, setTrocarSenha] = useState(false)
-  const { session, admin } = useApp()
-  const nav = NAV.map((g) => ({ ...g, itens: g.itens.filter((i) => admin || ('consulta' in i && i.consulta)) })).filter((g) => g.itens.length)
+  const { session, admin, verPremiacoes } = useApp()
+  const nav = NAV.map((g) => ({
+    ...g, itens: g.itens.filter((i) => admin || i.consulta || (i.premiacoes && verPremiacoes)),
+  })).filter((g) => g.itens.length)
   return (
     <div className="flex min-h-screen">
       <aside className={`fixed inset-y-0 left-0 z-40 w-56 transform bg-slate-900 text-slate-200 transition lg:static lg:translate-x-0 ${aberto ? 'translate-x-0' : '-translate-x-full'}`}>

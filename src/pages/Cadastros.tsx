@@ -75,7 +75,7 @@ const PERFIS: { valor: Perfil; nome: string; descricao: string }[] = [
   { valor: 'consulta', nome: 'Consulta', descricao: 'só vê o Painel' },
 ]
 
-type Membro = { email: string; perfil: Perfil; unidades: string[] | null }
+type Membro = { email: string; perfil: Perfil; unidades: string[] | null; ver_premiacoes: boolean }
 
 /** unidades que o usuário de Consulta vê no Painel; nenhuma marcada = todas */
 function EscolhaUnidades({ valor, onChange }: { valor: string[] | null; onChange: (v: string[] | null) => void }) {
@@ -109,7 +109,7 @@ function Usuarios({ setErro }: SetErro) {
   const [senha, setSenha] = useState('')
   const [aviso, setAviso] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
-  const carregar = () => supabase.from('membros').select('email, perfil, unidades').order('email').then(({ data }) => setLista((data ?? []) as Membro[]))
+  const carregar = () => supabase.from('membros').select('email, perfil, unidades, ver_premiacoes').order('email').then(({ data }) => setLista((data ?? []) as Membro[]))
   useEffect(() => { carregar() }, [])
 
   // cria a conta de login (sem e-mail de confirmação) e libera o acesso
@@ -137,8 +137,17 @@ function Usuarios({ setErro }: SetErro) {
     setErro(error?.message ?? null); carregar()
   }
   async function mudarUnidades(e: string, unidades: string[] | null) {
-    setLista((l) => l.map((m) => (m.email === e ? { ...m, unidades } : m)))
-    const { error } = await supabase.from('membros').update({ unidades }).eq('email', e)
+    // restringir unidades tira as Premiações (elas exigem as 3 unidades)
+    const tirarPremiacoes = Boolean(unidades && lista.find((m) => m.email === e)?.ver_premiacoes)
+    setLista((l) => l.map((m) => (m.email === e ? { ...m, unidades, ver_premiacoes: tirarPremiacoes ? false : m.ver_premiacoes } : m)))
+    const { error } = await supabase.from('membros').update(tirarPremiacoes ? { unidades, ver_premiacoes: false } : { unidades }).eq('email', e)
+    setErro(error?.message ?? (tirarPremiacoes ? 'Premiações (só leitura) foi desmarcado: exige acesso a todas as unidades.' : null))
+  }
+  // Premiações só leitura: o prêmio da gerente usa as 3 unidades, então exige acesso a todas
+  async function mudarPremiacoes(m: Membro, v: boolean) {
+    if (v && m.unidades) { setErro('Para ver as Premiações, o usuário precisa ver todas as unidades (desmarque as unidades para liberar todas).'); return }
+    setLista((l) => l.map((x) => (x.email === m.email ? { ...x, ver_premiacoes: v } : x)))
+    const { error } = await supabase.from('membros').update({ ver_premiacoes: v }).eq('email', m.email)
     setErro(error?.message ?? null)
   }
   async function remover(e: string) {
@@ -154,14 +163,23 @@ function Usuarios({ setErro }: SetErro) {
         <p className="text-xs text-slate-500">
           Informe e-mail e senha inicial: o login é criado na hora, sem envio de e-mail (o e-mail não precisa existir).
           A pessoa troca a senha em "Alterar senha", no menu. <b>Administrador</b> acessa e altera tudo;
-          <b> Consulta</b> só vê o Painel do funil, das unidades marcadas (nenhuma marcada = todas).
+          <b> Consulta</b> só vê o Painel do funil e a Disputa, das unidades marcadas (nenhuma marcada = todas); marcando
+          <b> Premiações (só leitura)</b>, vê também a tela de Premiações das 3 unidades, sem poder alterar.
         </p>
       </div>
       <ul className="divide-y divide-slate-100">
         {lista.map((m) => (
           <li key={m.email} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm">
             <span className="min-w-56">{m.email}{m.email === eu && <span className="ml-2 text-xs text-slate-400">(você)</span>}</span>
-            {m.perfil === 'consulta' && <EscolhaUnidades valor={m.unidades} onChange={(v) => mudarUnidades(m.email, v)} />}
+            {m.perfil === 'consulta' && (
+              <span className="flex flex-wrap items-center gap-4">
+                <EscolhaUnidades valor={m.unidades} onChange={(v) => mudarUnidades(m.email, v)} />
+                <label className="flex items-center gap-1.5 text-xs text-slate-600" title="Vê a tela de Premiações das 3 unidades, sem poder alterar nada">
+                  <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={m.ver_premiacoes} onChange={(e) => mudarPremiacoes(m, e.target.checked)} />
+                  Premiações (só leitura)
+                </label>
+              </span>
+            )}
             <span className="flex items-center gap-2">
               {m.email === eu ? (
                 <span className="text-slate-600">{PERFIS.find((p) => p.valor === m.perfil)?.nome}</span>

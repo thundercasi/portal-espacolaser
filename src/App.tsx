@@ -27,15 +27,16 @@ function SemAcesso() {
 }
 
 function Rotas() {
-  const { session, membro, admin } = useApp()
+  const { session, membro, admin, verPremiacoes } = useApp()
   if (!session) return <Login />
   if (membro === null) return null
   if (!membro) return <SemAcesso />
-  // perfil Consulta: só o painel
+  // perfil Consulta: painel e disputa (e premiações, só leitura, se liberado)
   if (!admin) return (
     <Routes>
       <Route element={<Layout />}>
         <Route path="disputa" element={<Disputa />} />
+        {verPremiacoes && <Route path="premiacoes" element={<Premiacoes />} />}
         <Route path="*" element={<Painel />} />
       </Route>
     </Routes>

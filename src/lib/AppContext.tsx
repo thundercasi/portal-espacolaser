@@ -10,18 +10,20 @@ interface Ctx {
   membro: boolean | null
   perfil: Perfil | null
   admin: boolean
+  verPremiacoes: boolean // administrador ou Consulta com Premiações (só leitura)
   unidades: Unidade[]
   colaboradores: Colaborador[] // cadastro base; para um mês use equipeNoMes(colaboradores, vigencias, mes)
   vigencias: Vigencia[]
   usuarios: ColaboradorUsuario[]
   reloadCadastros: () => Promise<void>
 }
-const AppCtx = createContext<Ctx>({ session: null, membro: null, perfil: null, admin: false, unidades: [], colaboradores: [], vigencias: [], usuarios: [], reloadCadastros: async () => {} })
+const AppCtx = createContext<Ctx>({ session: null, membro: null, perfil: null, admin: false, verPremiacoes: false, unidades: [], colaboradores: [], vigencias: [], usuarios: [], reloadCadastros: async () => {} })
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [ready, setReady] = useState(false)
   const [membro, setMembro] = useState<boolean | null>(null)
+  const [verPremiacoes, setVerPremiacoes] = useState(false)
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [unidades, setUnidades] = useState<Unidade[]>([])
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
@@ -39,6 +41,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const { data: p } = await supabase.rpc('meu_perfil')
     setPerfil((p as Perfil | null) ?? null)
     setMembro(Boolean(p))
+    if (p) supabase.rpc('ve_premiacoes').then(({ data }) => setVerPremiacoes(Boolean(data)))
     if (!p) return
     const [u, c, v, cu] = await Promise.all([
       supabase.from('unidades').select('*').order('ordem'),
@@ -55,7 +58,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { reloadCadastros() }, [reloadCadastros])
 
   if (!ready) return null
-  return <AppCtx.Provider value={{ session, membro, perfil, admin: perfil === 'admin', unidades, colaboradores, vigencias, usuarios, reloadCadastros }}>{children}</AppCtx.Provider>
+  return <AppCtx.Provider value={{ session, membro, perfil, admin: perfil === 'admin', verPremiacoes: perfil === 'admin' || verPremiacoes, unidades, colaboradores, vigencias, usuarios, reloadCadastros }}>{children}</AppCtx.Provider>
 }
 
 export const useApp = () => useContext(AppCtx)
