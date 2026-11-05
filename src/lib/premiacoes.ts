@@ -49,6 +49,7 @@ export interface LinhaPremio {
   ajuste: Ajuste
   vendasPorUnidade?: { unidade: string; valor: number }[] // só quando vendeu fora da unidade do cadastro
   unidadeCadastro?: string | null                       // quando aparece em outra unidade (onde mais vendeu)
+  daRede?: { parte: number; status: Status }            // pessoa da Rede: parte do prêmio paga por esta unidade
 }
 
 export interface BlocoUnidade {
@@ -62,6 +63,7 @@ export interface BlocoUnidade {
   linhas: LinhaPremio[]
   semVinculo: { usuario: string; vendas: number; leads: number; agendamentos: number }[]
   total: number
+  resumo?: boolean // Rede: prêmios já distribuídos nas unidades (total 0 para não contar duas vezes)
 }
 
 /**
@@ -261,9 +263,26 @@ export function calcularPremiacoes(args: {
         .map(([id, x]) => ({ unidade: nomeUnidade.get(id) ?? '?', valor: x })).sort((a, b) => b.valor - a.valor)
       return linha
     })
+    // o prêmio da rede é pago pelas unidades: cada uma paga a parte proporcional ao seu líquido
+    // (a taxa continua sendo a do status da Rede); o bloco da Rede fica só como resumo
+    for (const b of blocos) {
+      const parte = liquido ? b.liquido / liquido : 0
+      for (const l of linhas) {
+        const x = (v: number) => v * parte
+        const linha: LinhaPremio = {
+          ...l, vendas: porPessoa.get(l.colaborador.id)?.porUnidade.get(b.unidade?.id ?? '') ?? 0, vendasPorUnidade: undefined,
+          faixa: 0, faixaAcimaDaTabela: false, agendamentos: 0, captacoes: 0,
+          premioAgendamentos: x(l.premioAgendamentos), premioCaptacoes: x(l.premioCaptacoes), premioVendas: x(l.premioVendas),
+          funcMes: x(l.funcMes), calculado: x(l.calculado), garantido: x(l.garantido), fixo: x(l.fixo), total: x(l.total),
+          daRede: { parte, status: st },
+        }
+        b.linhas.push(linha)
+        b.total += linha.total
+      }
+    }
     blocos.push({
       unidade: null, status: st, vendas: vendasT, cancelamentos: cancT, cancelamentosIgnorados: ignT, cancelamentosLista: [], liquido, linhas,
-      semVinculo: [], total: linhas.reduce((s, l) => s + l.total, 0),
+      semVinculo: [], total: 0, resumo: true,
     })
   }
 

@@ -126,8 +126,8 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
     if (!r) return
     const cab = ['Unidade', 'Nome', 'Função', 'Vendas', 'Vendas por unidade', 'Faixa', 'Agendamentos', 'Captações', 'Bateu meta', 'Prêmio agend.', 'Prêmio capt.', 'Prêmio vendas', 'Func. mês', 'Garantido', 'Fixo', 'Total']
     const num = (n: number) => n.toFixed(2).replace('.', ',')
-    const linhas = r.blocos.flatMap((b) => b.linhas.map((l) => [
-      b.unidade?.nome ?? 'Rede', l.colaborador.nome, l.colaborador.funcao, num(l.vendas),
+    const linhas = r.blocos.filter((b) => !b.resumo).flatMap((b) => b.linhas.map((l) => [
+      b.unidade?.nome ?? 'Rede', l.colaborador.nome, l.daRede ? `${l.colaborador.funcao} (Rede, ${num(l.daRede.parte * 100)}%)` : l.colaborador.funcao, num(l.vendas),
       (l.vendasPorUnidade ?? []).map((x) => `${x.unidade} ${num(x.valor)}`).join(' | '), l.faixa, l.agendamentos, l.captacoes,
       l.ajuste.bateu_meta ? 'S' : 'N', num(l.premioAgendamentos), num(l.premioCaptacoes), num(l.premioVendas), num(l.funcMes),
       num(l.garantido), num(l.fixo), num(l.total),
@@ -177,7 +177,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
           <li><b>Consultora</b>: prêmio de vendas pela faixa; + prêmio de agendamentos se tiver ≥ {regras.limiteAgendamentos}; + prêmio de captações (leads) se tiver ≥ {regras.limiteCaptacoes}.</li>
           <li><b>Aplicadora</b>: prêmio de vendas pela tabela das esteticistas.</li>
-          <li><b>Subgerente</b>: % das vendas líquidas da unidade. <b>Gerente</b>: % das vendas líquidas das unidades (Rede).</li>
+          <li><b>Subgerente</b>: % das vendas líquidas da unidade. <b>Gerente</b>: % das vendas líquidas das unidades, com o status da Rede; aparece em cada unidade com a parte que ela paga (proporcional ao líquido da unidade). O bloco da Rede fica só como resumo e para escolher o status.</li>
           <li><b>Funcionário do mês</b> só conta quando o status é Super. Os prêmios só são pagos se "Bateu meta" estiver marcado.</li>
           <li><b>Garantido</b>: consultora sem prêmio de meta recebe {brl0(regras.garantidoConsultora)}, a menos que seja retirado (faltas etc.).</li>
           <li><b>Valor fixo</b>: exceções cadastradas em Cadastros → Equipe (ex.: limpeza), pago todo mês.</li>
@@ -241,12 +241,18 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
               const c = l.colaborador
               const usaMetas = c.funcao !== 'Outro'
               return (
-                <tr key={c.id}>
+                <tr key={c.id} className={l.daRede ? 'bg-violet-50/40' : ''}>
                   <td className="td text-left font-medium">
                     {c.nome}
                     {l.unidadeCadastro && <div className="text-[11px] font-normal text-slate-500">cadastro: {l.unidadeCadastro} · aqui por ter vendido mais nesta unidade</div>}
+                    {l.daRede && (
+                      <div className="text-[11px] font-normal text-slate-500">
+                        parte desta unidade: {(l.daRede.parte * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% do prêmio (líquido da unidade ÷ das 3) · status da Rede: {l.daRede.status}
+                      </div>
+                    )}
+                    {b.resumo && <div className="text-[11px] font-normal text-slate-500">prêmio total; já está dividido e pago nas unidades</div>}
                   </td>
-                  <td className="td text-left text-slate-500">{c.funcao}</td>
+                  <td className="td text-left text-slate-500">{c.funcao}{l.daRede && ' · Rede'}</td>
                   <td className="td">
                     {b.unidade || l.vendas ? brl0(l.vendas) : '—'}
                     {l.vendasPorUnidade && (
@@ -265,7 +271,9 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
                   <td className="td">{l.premioCaptacoes ? brl0(l.premioCaptacoes) : ''}</td>
                   <td className="td">{l.premioVendas ? brl0(l.premioVendas) : ''}</td>
                   <td className="td">
-                    {usaMetas && b.status === 'Super'
+                    {l.daRede
+                      ? (l.funcMes ? brl0(l.funcMes) : '')
+                      : usaMetas && b.status === 'Super'
                       ? <NumInput className="ml-auto w-24 text-right" value={l.ajuste.func_mes || null} placeholder="0" onChange={(v) => onAjuste(c.id, { func_mes: v })} />
                       : ''}
                   </td>
@@ -284,7 +292,9 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
             })}
           </tbody>
           <tfoot className="border-t border-slate-200 bg-slate-50 font-semibold tabular-nums">
-            <tr><td className="td text-left" colSpan={13}>Total {b.unidade?.nome ?? 'Rede'}</td><td className="td">{brl0(b.total)}</td></tr>
+            {b.resumo
+              ? <tr><td className="td text-left font-normal text-slate-500" colSpan={13}>Prêmios da Rede já incluídos nos totais das unidades (parte de cada uma)</td><td className="td">{brl0(b.linhas.reduce((s, l) => s + l.total, 0))}</td></tr>
+              : <tr><td className="td text-left" colSpan={13}>Total {b.unidade?.nome ?? 'Rede'}</td><td className="td">{brl0(b.total)}</td></tr>}
           </tfoot>
         </table>
       </div>

@@ -47,7 +47,7 @@ Diferenças em relação à planilha:
 - **Agendamentos** = criados no mês pelo usuário (Usuário de Criação); **captações** = leads cadastrados no mês pelo usuário.
 - O prêmio só é pago se **Bateu meta** estiver marcado. Funcionário do mês só conta no status Super.
 - **Venda em outra unidade** soma para a pessoa: usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades, e cadastros de consultora/aplicadora com o mesmo nome em unidades diferentes contam como uma pessoa só (a unidade é decidida mês a mês, então não é preciso desativar cadastros). Consultora e aplicadora aparecem no bloco da unidade em que mais venderam no mês (e usam o status dela), com o quanto vendeu em cada unidade abaixo do valor. O líquido de cada unidade continua sendo o da própria loja.
-- A **gerente** fica na Equipe como Rede (sem unidade) e ganha % sobre o líquido das unidades, com o status da Rede.
+- A **gerente** aparece em cada unidade com a parte do prêmio que a unidade paga (taxa do status da Rede × líquido da unidade; as partes somam o prêmio total); o bloco da Rede fica como resumo e para escolher o status. Ela fica na Equipe como Rede (sem unidade) e ganha % sobre o líquido das unidades, com o status da Rede.
 
 ## Perfis de acesso
 
