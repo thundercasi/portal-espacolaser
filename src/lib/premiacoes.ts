@@ -3,15 +3,17 @@ import { normalizar } from './importar'
 import { criarResolvedor } from './depara'
 import type { Colaborador, ColaboradorUsuario, Unidade } from './types'
 
-export type Status = 'Nenhum' | 'Meta' | 'Super'
-export const STATUS: Status[] = ['Nenhum', 'Meta', 'Super']
+// Hiper: só a subgerente tem taxa própria; para os demais vale como Super
+export type Status = 'Nenhum' | 'Meta' | 'Super' | 'Hiper'
+export const STATUS: Status[] = ['Nenhum', 'Meta', 'Super', 'Hiper']
+export const SUBGERENTE_HIPER_PADRAO = 0.012
 
 interface PremiosConsultora { captacoes: number; agendamentos: number; vendas: number }
 export interface Regras {
   limiteCaptacoes: number
   limiteAgendamentos: number
   garantidoConsultora: number
-  subgerente: { Meta: number; Super: number }
+  subgerente: { Meta: number; Super: number; Hiper?: number }
   gerente: { Meta: number; Super: number }
   consultora: { faixa: number; Meta: PremiosConsultora; Super: PremiosConsultora }[]
   aplicadora: { faixa: number; Meta: number; Super: number }[]
@@ -118,8 +120,9 @@ export function calcularPremiacoes(args: {
     return `${dia.slice(0, 8)}${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`
   }
 
-  const montarLinha = (c: Colaborador, st: Status, base: number, v: number, ag: number, cap: number): LinhaPremio => {
+  const montarLinha = (c: Colaborador, status: Status, base: number, v: number, ag: number, cap: number): LinhaPremio => {
     const ajuste = ajustes.get(c.id) ?? ajustePadrao
+    const st = status === 'Hiper' ? 'Super' : status // tabelas só têm Meta e Super
     const faixa = Math.floor(v / 10000)
     let pAg = 0, pCap = 0, pVen = 0, acima = false
     if (st !== 'Nenhum') {
@@ -138,7 +141,7 @@ export function calcularPremiacoes(args: {
         acima = a
         if (linha) pVen = linha[st]
       }
-      if (c.funcao === 'Subgerente') pVen = base * regras.subgerente[st]
+      if (c.funcao === 'Subgerente') pVen = base * (status === 'Hiper' ? regras.subgerente.Hiper ?? SUBGERENTE_HIPER_PADRAO : regras.subgerente[st])
       if (c.funcao === 'Gerente') pVen = base * regras.gerente[st]
     }
     const funcMes = st === 'Super' ? Number(ajuste.func_mes) || 0 : 0

@@ -6,7 +6,7 @@ import { useApp } from '../lib/AppContext'
 import { equipeNoMes } from '../lib/equipe'
 import { addMeses, fimMes, fmtBRL, fmtData, inicioMes, mesAtual, nomeMes } from '../lib/format'
 import {
-  ajustePadrao, calcularPremiacoes, STATUS,
+  ajustePadrao, calcularPremiacoes, STATUS, SUBGERENTE_HIPER_PADRAO,
   type Ajuste, type BlocoUnidade, type Cancelamento, type Contagem, type Regras, type Status, type VendaTransferida, type VendaVendedor,
 } from '../lib/premiacoes'
 import { ORIGENS_AVALIACAO } from '../lib/painel'
@@ -191,7 +191,7 @@ function Calculo({ mes, regras, setErro }: { mes: string; regras: Regras; setErr
       <details className="text-sm text-slate-600">
         <summary className="cursor-pointer font-medium text-slate-700">Como é calculado</summary>
         <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li><b>Status</b> da unidade (Nenhum, Meta ou Super) é escolhido à mão; a Rede tem status próprio para a gerente.</li>
+          <li><b>Status</b> da unidade (Nenhum, Meta, Super ou Hiper) é escolhido à mão; a Rede tem status próprio para a gerente. <b>Hiper</b> só muda a subgerente (% próprio); para os demais vale como Super.</li>
           <li><b>Vendas líquidas da unidade</b> = vendas do relatório por vendedor − cancelamentos do mês. Cancelamentos de vendas feitas há mais de 1 ano e cancelamentos no mesmo dia da venda são ignorados (a lista para conferir fica no fim de cada unidade).</li>
           <li><b>Vendas em outra unidade</b> somam para a pessoa: usuário sem vínculo na loja da venda é ligado pelo vínculo dele nas outras unidades, e cadastros com o mesmo nome em unidades diferentes contam como uma pessoa só (não é preciso desativar nenhum). Consultora e aplicadora aparecem na unidade em que mais venderam no mês e usam o status dela; abaixo do valor fica quanto vendeu em cada unidade. O líquido de cada unidade continua sendo o da própria loja.</li>
           <li><b>Faixa</b> = vendas da pessoa ÷ 10.000 (sem casas). Acima da última faixa da tabela, paga a última faixa.</li>
@@ -292,13 +292,13 @@ function BlocoCard({ b, regras, meta, metasRede, onStatus, onAjuste }: {
                   <td className="td">{l.premioVendas ? brl0(l.premioVendas) : ''}</td>
                   <td className="td">
                     {l.daRede
-                      ? (l.daRede.status === 'Super'
+                      ? (l.daRede.status === 'Super' || l.daRede.status === 'Hiper'
                         // valor total do mês; o prêmio mostrado ao lado já vem dividido entre as unidades
                         ? <span title={`Total do mês (dividido entre as unidades; parte desta: ${brl0(l.funcMes)})`}>
                             <NumInput className="ml-auto w-24 text-right" value={l.ajuste.func_mes || null} placeholder="0" onChange={(v) => onAjuste(c.id, { func_mes: v })} />
                           </span>
                         : '')
-                      : usaMetas && b.status === 'Super'
+                      : usaMetas && (b.status === 'Super' || b.status === 'Hiper')
                       ? <NumInput className="ml-auto w-24 text-right" value={l.ajuste.func_mes || null} placeholder="0" onChange={(v) => onAjuste(c.id, { func_mes: v })} />
                       : ''}
                   </td>
@@ -390,7 +390,7 @@ function EditorRegras({ regras, onSalvo, setErro }: { regras: Regras; onSalvo: (
         <label className="block"><span className="label">Garantido da consultora sem prêmio (R$)</span><NumInput value={r.garantidoConsultora} onChange={(v) => set({ garantidoConsultora: v })} /></label>
         <label className="block"><span className="label">Subgerente — % na Meta</span><PctInput value={r.subgerente.Meta} onChange={(v) => set({ subgerente: { ...r.subgerente, Meta: v } })} /></label>
         <label className="block"><span className="label">Subgerente — % na Super</span><PctInput value={r.subgerente.Super} onChange={(v) => set({ subgerente: { ...r.subgerente, Super: v } })} /></label>
-        <div />
+        <label className="block"><span className="label">Subgerente — % na Hiper</span><PctInput value={r.subgerente.Hiper ?? SUBGERENTE_HIPER_PADRAO} onChange={(v) => set({ subgerente: { ...r.subgerente, Hiper: v } })} /></label>
         <label className="block"><span className="label">Gerente — % na Meta</span><PctInput value={r.gerente.Meta} onChange={(v) => set({ gerente: { ...r.gerente, Meta: v } })} /></label>
         <label className="block"><span className="label">Gerente — % na Super</span><PctInput value={r.gerente.Super} onChange={(v) => set({ gerente: { ...r.gerente, Super: v } })} /></label>
       </div>
