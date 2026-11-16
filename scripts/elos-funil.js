@@ -44,8 +44,17 @@ window.CF = {
   async garantirUnidade() {
     const alvo = /CASSIANO COLOMBO\/RONNEY/i
     if (alvo.test(CF.unidadeAtual())) return
-    const n = document.querySelector('.multitabs-unit-node[data-id="458"]')
+    const no458 = () => document.querySelector('.multitabs-unit-node[data-id="458"]')
+    // os nós de unidade só existem depois que o seletor do topo é aberto
+    if (!no458()) {
+      const nome = document.getElementById('multitabs-unit-name')
+      ;(nome?.closest('button, a, [data-toggle], [role="button"]') || nome)?.click()
+      for (let i = 0; i < 10 && !no458(); i++) await CF.esperar(1000)
+    }
+    const n = no458()
     if (!n) throw new Error('UNIDADE_458_NAO_ENCONTRADA')
+    // a troca de unidade pode recarregar a página e interromper este script;
+    // nesse caso a nova tentativa (após a recarga) já encontra a unidade certa
     n.click(); n.querySelector('.multitabs-unit-desc')?.click()
     for (let i = 0; i < 10 && !alvo.test(CF.unidadeAtual()); i++) await CF.esperar(2000)
     if (!alvo.test(CF.unidadeAtual())) throw new Error('UNIDADE_NAO_TROCOU (' + CF.unidadeAtual() + ')')
